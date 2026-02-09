@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CDO 2026 Budget Dashboard</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+<body class="bg-slate-950 text-slate-100 font-sans antialiased">
+
+  <!-- Navigation -->
+  <nav id="navbar" class="fixed top-0 left-0 right-0 z-50 backdrop-blur-xl bg-slate-950/80 border-b border-slate-800/50 transition-all duration-300">
+    <div class="max-w-[1440px] mx-auto px-6 h-16 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-violet-600 flex items-center justify-center text-white font-bold text-sm">B</div>
+        <span class="text-lg font-semibold tracking-tight">Budget Sanity</span>
+        <span class="text-xs font-medium text-slate-500 bg-slate-800/60 px-2 py-0.5 rounded-full">FY2026</span>
+      </div>
+      <div class="hidden md:flex items-center gap-1">
+        <a href="#overview" class="nav-link">Overview</a>
+        <a href="#breakdown" class="nav-link">Breakdown</a>
+        <a href="#planning" class="nav-link">Planning</a>
+        <a href="#timeline" class="nav-link">Timeline</a>
+        <a href="#line-items" class="nav-link">Line Items</a>
+        <a href="#audit" class="nav-link">Audit</a>
+        <a href="#recommendations" class="nav-link">Recommendations</a>
+      </div>
+      <div class="flex items-center gap-2">
+        <button id="refresh-btn" title="Re-extract from Excel" class="p-2 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-blue-400 transition relative">
+          <svg id="refresh-icon" class="w-5 h-5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+          <span id="refresh-status" class="hidden absolute -bottom-6 left-1/2 -translate-x-1/2 text-xs whitespace-nowrap bg-slate-800 text-slate-300 px-2 py-0.5 rounded"></span>
+        </button>
+        <button id="mobile-menu-btn" class="md:hidden p-2 rounded-lg hover:bg-slate-800 transition">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+        </button>
+      </div>
+    </div>
+    <!-- Mobile menu -->
+    <div id="mobile-menu" class="hidden md:hidden border-t border-slate-800/50 pb-4 px-6">
+      <a href="#overview" class="mobile-nav-link">Overview</a>
+      <a href="#breakdown" class="mobile-nav-link">Breakdown</a>
+      <a href="#planning" class="mobile-nav-link">Planning</a>
+      <a href="#timeline" class="mobile-nav-link">Timeline</a>
+      <a href="#line-items" class="mobile-nav-link">Line Items</a>
+      <a href="#audit" class="mobile-nav-link">Audit</a>
+      <a href="#recommendations" class="mobile-nav-link">Recommendations</a>
+    </div>
+  </nav>
+
+  <main class="max-w-[1440px] mx-auto px-6 pt-24 pb-16">
+
+    <!-- Hero Header -->
+    <header class="mb-12 animate-fade-in">
+      <div class="flex flex-col md:flex-row md:items-end md:justify-between gap-4 mb-2">
+        <div>
+          <p class="text-sm font-medium text-blue-400 tracking-wide uppercase mb-1">Corporate Data Office</p>
+          <h1 class="text-4xl md:text-5xl font-extrabold tracking-tight bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent">
+            2026 Budget Dashboard
+          </h1>
+          <p class="mt-2 text-slate-400 text-lg">Comprehensive budget analysis, variance tracking, and recommendations</p>
+        </div>
+        <div class="flex items-center gap-2 text-sm text-slate-500">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+          <span>Updated Feb 9, 2026</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- KPI Cards Section -->
+    <section id="overview" class="mb-16 scroll-mt-24 animate-fade-in-up">
+      <div class="grid grid-cols-2 lg:grid-cols-7 gap-4" id="kpi-cards">
+        <!-- Filled by JS -->
+      </div>
+    </section>
+
+    <!-- Budget Breakdown Charts -->
+    <section id="breakdown" class="mb-16 scroll-mt-24 animate-fade-in-up">
+      <div class="section-header">
+        <h2 class="section-title">Budget Breakdown</h2>
+        <p class="section-subtitle">Allocation by category, source fund, and expense type</p>
+      </div>
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div class="card lg:col-span-2">
+          <h3 class="card-title">By Category</h3>
+          <div class="chart-container" style="height: 400px;">
+            <canvas id="chart-category"></canvas>
+          </div>
+        </div>
+        <div class="flex flex-col gap-6">
+          <div class="card flex-1">
+            <h3 class="card-title">By Source Fund</h3>
+            <div class="chart-container" style="height: 200px;">
+              <canvas id="chart-fund"></canvas>
+            </div>
+          </div>
+          <div class="card flex-1">
+            <h3 class="card-title">By Expense Type</h3>
+            <div class="chart-container" style="height: 200px;">
+              <canvas id="chart-expense"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Approved vs Committed -->
+    <section class="mb-16 scroll-mt-24 animate-fade-in-up">
+      <div class="section-header">
+        <h2 class="section-title">Approved vs Committed</h2>
+        <p class="section-subtitle">Budget categories showing approved envelope vs committed SOWs</p>
+      </div>
+      <div class="card">
+        <div class="flex flex-wrap items-center gap-4 mb-4">
+          <h3 class="card-title mb-0">Category Commitment Status</h3>
+          <div class="flex items-center gap-3 ml-auto text-sm">
+            <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-blue-500"></span> Approved</span>
+            <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-violet-500"></span> Committed (SOWs)</span>
+            <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-amber-500"></span> Unallocated</span>
+          </div>
+        </div>
+        <div class="chart-container" style="height: 400px;">
+          <canvas id="chart-approved-committed"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <!-- Budget Planning Tools -->
+    <section id="planning" class="mb-16 scroll-mt-24 animate-fade-in-up">
+      <div class="section-header">
+        <h2 class="section-title">Budget Planning</h2>
+        <p class="section-subtitle">Interactive tools for unallocated fund analysis and scenario planning</p>
+      </div>
+
+      <!-- Tool 1: Unallocated Breakdown -->
+      <div class="card mb-6">
+        <h3 class="card-title">Unallocated Funds Breakdown</h3>
+        <p class="text-xs text-slate-500 mb-4">Where unallocated budget sits across categories</p>
+        <div class="chart-container" style="height: 300px;">
+          <canvas id="chart-unallocated"></canvas>
+        </div>
+        <div id="unallocated-table" class="mt-4"></div>
+      </div>
+
+      <!-- Tool 5: Budget Runway + Tool 6: Sunburst side by side -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        <!-- Tool 5: Budget Runway -->
+        <div class="card">
+          <h3 class="card-title">Budget Runway</h3>
+          <p class="text-xs text-slate-500 mb-4">How many months of additional capacity each category can fund</p>
+          <div id="runway-gauges"></div>
+        </div>
+        <!-- Tool 6: Allocation Sunburst -->
+        <div class="card">
+          <h3 class="card-title">Allocation Map</h3>
+          <p class="text-xs text-slate-500 mb-4">Every dollar -- categories (inner) and individual SOWs (outer)</p>
+          <div class="chart-container" style="height: 350px;">
+            <canvas id="chart-sunburst"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tool 2 + Tool 3: Calculators side by side -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        <!-- Tool 2: Hiring Capacity Calculator -->
+        <div class="card">
+          <h3 class="card-title">Hiring Capacity Calculator</h3>
+          <p class="text-xs text-slate-500 mb-4">What could you buy with unallocated funds?</p>
+          <div class="calc-controls">
+            <div class="calc-row">
+              <label class="calc-label">Category</label>
+              <select id="calc-category" class="table-filter" style="width:100%">
+                <option value="__all__">All Categories (combined)</option>
+              </select>
+            </div>
+            <div class="calc-row">
+              <label class="calc-label">Role Type</label>
+              <div class="calc-toggle" id="calc-role-toggle">
+                <button class="calc-toggle-btn active" data-role="cl">Contingent Labor</button>
+                <button class="calc-toggle-btn" data-role="ps">Professional Services</button>
+              </div>
+            </div>
+            <div class="calc-row">
+              <label class="calc-label">Annual Rate: <span id="calc-rate-display" class="text-blue-400 font-semibold">$281,106</span></label>
+              <input type="range" id="calc-rate" min="50000" max="600000" step="5000" value="281106" class="calc-slider">
+              <div class="flex justify-between text-xs text-slate-600"><span>$50K</span><span>$600K</span></div>
+            </div>
+            <div class="calc-row">
+              <label class="calc-label">Duration: <span id="calc-duration-display" class="text-blue-400 font-semibold">11 months</span></label>
+              <input type="range" id="calc-duration" min="1" max="12" step="1" value="11" class="calc-slider">
+              <div class="flex justify-between text-xs text-slate-600"><span>1 mo</span><span>12 mo</span></div>
+            </div>
+          </div>
+          <div id="calc-output" class="calc-output mt-4"></div>
+        </div>
+
+        <!-- Tool 3: SOW Cut Simulator -->
+        <div class="card">
+          <h3 class="card-title">SOW Cut Simulator</h3>
+          <p class="text-xs text-slate-500 mb-4">What if you cut or reduced an existing SOW?</p>
+          <div class="calc-controls">
+            <div class="calc-row">
+              <label class="calc-label">Select SOW</label>
+              <select id="cut-sow" class="table-filter" style="width:100%">
+                <option value="">-- Choose a SOW --</option>
+              </select>
+            </div>
+            <div class="calc-row">
+              <label class="calc-label">Action</label>
+              <div class="calc-toggle" id="cut-action-toggle">
+                <button class="calc-toggle-btn active" data-action="full">Cut Entirely</button>
+                <button class="calc-toggle-btn" data-action="reduce">Reduce By Amount</button>
+              </div>
+            </div>
+            <div class="calc-row" id="cut-amount-row" style="display:none">
+              <label class="calc-label">Reduction: <span id="cut-amount-display" class="text-blue-400 font-semibold">$0</span></label>
+              <input type="range" id="cut-amount" min="0" max="500000" step="5000" value="0" class="calc-slider">
+            </div>
+          </div>
+          <div id="cut-output" class="calc-output mt-4"></div>
+        </div>
+      </div>
+
+      <!-- Tool 4: Scenario Planner -->
+      <div class="card">
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <h3 class="card-title mb-0">Scenario Planner</h3>
+            <p class="text-xs text-slate-500 mt-1">Sketch multiple budget changes and see the net impact</p>
+          </div>
+          <div class="flex gap-2">
+            <button id="scenario-add" class="scenario-btn scenario-btn-primary">+ Add Row</button>
+            <button id="scenario-reset" class="scenario-btn scenario-btn-ghost">Reset</button>
+          </div>
+        </div>
+        <div class="overflow-x-auto rounded-xl border border-slate-800/50">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="bg-slate-800/40 text-slate-400 text-left">
+                <th class="table-th" style="width:120px">Action</th>
+                <th class="table-th" style="width:180px">Category</th>
+                <th class="table-th">Description</th>
+                <th class="table-th text-right" style="width:140px">Amount</th>
+                <th class="table-th text-right" style="width:140px">Impact</th>
+                <th class="table-th" style="width:50px"></th>
+              </tr>
+            </thead>
+            <tbody id="scenario-body">
+              <tr><td colspan="6" class="table-td text-center text-slate-600">Click "Add Row" to start planning</td></tr>
+            </tbody>
+            <tfoot id="scenario-foot"></tfoot>
+          </table>
+        </div>
+        <div id="scenario-summary" class="mt-4"></div>
+      </div>
+    </section>
+
+    <!-- Monthly Timeline -->
+    <section id="timeline" class="mb-16 scroll-mt-24 animate-fade-in-up">
+      <div class="section-header">
+        <h2 class="section-title">Monthly Timeline</h2>
+        <p class="section-subtitle">Budget vs Forecast vs Actuals across the fiscal year</p>
+      </div>
+      <div class="card">
+        <div class="flex flex-wrap items-center gap-4 mb-4">
+          <h3 class="card-title mb-0">Monthly Spend Comparison</h3>
+          <div class="flex items-center gap-3 ml-auto text-sm">
+            <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-blue-500"></span> Budget</span>
+            <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-violet-500"></span> Forecast</span>
+            <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-emerald-500"></span> Actuals</span>
+          </div>
+        </div>
+        <div class="chart-container" style="height: 350px;">
+          <canvas id="chart-timeline"></canvas>
+        </div>
+      </div>
+
+      <!-- Variance Charts -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+        <div class="card">
+          <h3 class="card-title">Budget vs Actual Variance (Monthly)</h3>
+          <p class="text-xs text-slate-500 mb-3">Approved plan minus actuals — positive = under budget</p>
+          <div class="chart-container" style="height: 300px;">
+            <canvas id="chart-variance"></canvas>
+          </div>
+        </div>
+        <div class="card">
+          <h3 class="card-title">Forecast vs Actual Variance (Monthly)</h3>
+          <p class="text-xs text-slate-500 mb-3">Committed forecast minus actuals — how spend is tracking vs plan</p>
+          <div class="chart-container" style="height: 300px;">
+            <canvas id="chart-forecast-variance"></canvas>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Line Items Table -->
+    <section id="line-items" class="mb-16 scroll-mt-24 animate-fade-in-up">
+      <div class="section-header">
+        <h2 class="section-title">Line Items</h2>
+        <p class="section-subtitle">All budget line items with search, sort, and filter</p>
+      </div>
+      <div class="card overflow-hidden">
+        <!-- Controls -->
+        <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 mb-4">
+          <div class="relative flex-1">
+            <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+            <input id="table-search" type="text" placeholder="Search categories, vendors, descriptions..." class="w-full pl-10 pr-4 py-2.5 bg-slate-800/60 border border-slate-700/50 rounded-xl text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500/40 transition" />
+          </div>
+          <div class="flex gap-2">
+            <select id="filter-fund" class="table-filter">
+              <option value="">All Funds</option>
+            </select>
+            <select id="filter-type" class="table-filter">
+              <option value="">All Types</option>
+            </select>
+            <select id="filter-event" class="table-filter">
+              <option value="">All Events</option>
+            </select>
+          </div>
+        </div>
+        <!-- Table -->
+        <div class="overflow-x-auto rounded-xl border border-slate-800/50">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="bg-slate-800/40 text-slate-400 text-left">
+                <th class="table-th sortable" data-sort="category">Category</th>
+                <th class="table-th sortable" data-sort="event_type">Event</th>
+                <th class="table-th sortable" data-sort="source_fund">Fund</th>
+                <th class="table-th sortable" data-sort="expense_type">Type</th>
+                <th class="table-th">Vendor</th>
+                <th class="table-th">Description</th>
+                <th class="table-th sortable text-right" data-sort="budget_fy26">Budget FY26</th>
+                <th class="table-th sortable text-right" data-sort="committed_fy26">Committed FY26</th>
+                <th class="table-th sortable text-right" data-sort="forecast_fy">Forecast FY</th>
+                <th class="table-th sortable text-right" data-sort="actual_fy">Actual FY26</th>
+                <th class="table-th text-right">Variance</th>
+                <th class="table-th text-right">% Spent</th>
+              </tr>
+            </thead>
+            <tbody id="table-body">
+              <!-- Filled by JS -->
+            </tbody>
+            <tfoot id="table-foot">
+              <!-- Filled by JS -->
+            </tfoot>
+          </table>
+        </div>
+        <div id="table-stats" class="mt-3 text-xs text-slate-500"></div>
+      </div>
+    </section>
+
+    <!-- Formula Audit -->
+    <section id="audit" class="mb-16 scroll-mt-24 animate-fade-in-up">
+      <div class="section-header">
+        <h2 class="section-title">Formula Audit</h2>
+        <p class="section-subtitle">Issues and observations found in the spreadsheet</p>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4" id="audit-cards">
+        <!-- Filled by JS -->
+      </div>
+    </section>
+
+    <!-- Recommendations -->
+    <section id="recommendations" class="mb-16 scroll-mt-24 animate-fade-in-up">
+      <div class="section-header">
+        <h2 class="section-title">Recommendations</h2>
+        <p class="section-subtitle">Actionable improvements to strengthen budget management</p>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" id="rec-cards">
+        <!-- Filled by JS -->
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="border-t border-slate-800/50 py-8">
+    <div class="max-w-[1440px] mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-slate-500">
+      <span>Budget Sanity Dashboard &middot; CDO FY2026</span>
+      <span>Source: CDO Budget - 2026-02-08.xlsx</span>
+    </div>
+  </footer>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

@@ -51,6 +51,25 @@ const isUnapproved = (eventType) => eventType === 'Unapproved Budget' || eventTy
 const isBudgetType = (eventType) => eventType === 'Budget' || eventType === 'Unapproved Budget';
 const isSOWType = (eventType) => eventType === 'SOW' || eventType === 'Unapproved SOW';
 
+// Distinct source funds from data
+const ALL_FUNDS = [...new Set(budgetData.line_items.map(i => i.source_fund))].sort();
+
+// Reusable: populate a <select> with fund options
+function populateFundFilter(selectEl) {
+  ALL_FUNDS.forEach(f => {
+    const opt = document.createElement('option');
+    opt.value = f;
+    opt.textContent = f;
+    selectEl.appendChild(opt);
+  });
+}
+
+// Chart instances for destroy/recreate pattern
+let acChart = null;
+let unallocChart = null;
+let vendorChart = null;
+let sunburstChart = null;
+
 // ============================================================
 // 1. KPI Cards
 // ============================================================
@@ -515,12 +534,13 @@ function renderForecastVarianceChart() {
 // ============================================================
 // 6c. Approved vs Committed by Category (approved only)
 // ============================================================
-function renderApprovedCommittedChart() {
-  // Only include approved rows (Budget + SOW), NOT Unapproved
-  const catMap = {};
+function renderApprovedCommittedChart(fundFilter = '') {
+  if (acChart) { acChart.destroy(); acChart = null; }
 
+  const catMap = {};
   budgetData.line_items.forEach((item) => {
-    if (isUnapproved(item.event_type)) return; // Skip unapproved
+    if (isUnapproved(item.event_type)) return;
+    if (fundFilter && item.source_fund !== fundFilter) return;
     const cat = item.category || 'Other';
     if (!catMap[cat]) catMap[cat] = { approved: 0, sowCommitted: 0 };
     if (item.event_type === 'Budget') {
@@ -539,7 +559,7 @@ function renderApprovedCommittedChart() {
   const committedData = entries.map(([, v]) => v.sowCommitted);
   const unallocatedData = entries.map(([, v]) => Math.max(0, v.approved - v.sowCommitted));
 
-  new Chart(document.getElementById('chart-approved-committed'), {
+  acChart = new Chart(document.getElementById('chart-approved-committed'), {
     type: 'bar',
     data: {
       labels,
@@ -596,22 +616,16 @@ function renderApprovedCommittedChart() {
             },
           },
         },
-        legend: {
-          display: false,
-        },
+        legend: { display: false },
       },
       scales: {
         x: {
           grid: { color: 'rgba(51, 65, 85, 0.2)' },
-          ticks: {
-            callback: (v) => fmt(v),
-          },
+          ticks: { callback: (v) => fmt(v) },
         },
         y: {
           grid: { display: false },
-          ticks: {
-            font: { size: 11 },
-          },
+          ticks: { font: { size: 11 } },
         },
       },
     },
@@ -928,10 +942,11 @@ function initNavbarScroll() {
 // ============================================================
 // 13. Budget Planning Tools -- shared data
 // ============================================================
-function getCategoryUnallocated() {
+function getCategoryUnallocated(fundFilter = '') {
   const catMap = {};
   budgetData.line_items.forEach((item) => {
     if (isUnapproved(item.event_type)) return;
+    if (fundFilter && item.source_fund !== fundFilter) return;
     const cat = item.category || 'Other';
     if (!catMap[cat]) catMap[cat] = { budget: 0, sowCommitted: 0, sows: [] };
     if (item.event_type === 'Budget') {
@@ -956,8 +971,10 @@ function getSOWAverages() {
 // ============================================================
 // 13a. Tool 1: Unallocated Funds Breakdown
 // ============================================================
-function renderUnallocatedBreakdown() {
-  const catMap = getCategoryUnallocated();
+function renderUnallocatedBreakdown(fundFilter = '') {
+  if (unallocChart) { unallocChart.destroy(); unallocChart = null; }
+
+  const catMap = getCategoryUnallocated(fundFilter);
   const entries = Object.entries(catMap)
     .filter(([, v]) => v.budget > 0)
     .sort((a, b) => (b[1].budget - b[1].sowCommitted) - (a[1].budget - a[1].sowCommitted));
@@ -967,7 +984,7 @@ function renderUnallocatedBreakdown() {
   const unallocData = entries.map(([, v]) => Math.max(0, v.budget - v.sowCommitted));
   const overData = entries.map(([, v]) => Math.max(0, v.sowCommitted - v.budget));
 
-  new Chart(document.getElementById('chart-unallocated'), {
+  unallocChart = new Chart(document.getElementById('chart-unallocated'), {
     type: 'bar',
     data: {
       labels,
@@ -1047,7 +1064,7 @@ function renderUnallocatedBreakdown() {
           <td class="table-td text-right font-bold">${fmtFull(totalBudget)}</td>
           <td class="table-td text-right font-bold">${fmtFull(totalSow)}</td>
           <td class="table-td text-right font-bold ${totalUnalloc >= 0 ? 'val-positive' : 'val-negative'}">${fmtFull(totalUnalloc)}</td>
-          <td class="table-td text-right font-bold">${(totalUnalloc / totalBudget * 100).toFixed(0)}%</td>
+          <td class="table-td text-right font-bold">${totalBudget > 0 ? (totalUnalloc / totalBudget * 100).toFixed(0) : 0}%</td>
         </tr></tfoot>
       </table>
     </div>`;
@@ -1418,83 +1435,258 @@ function renderRunwayGauges() {
 }
 
 // ============================================================
-// 13f. Tool 6: Allocation Sunburst (nested doughnut)
+// 13f. Tool 6: Allocation Sunburst (nested doughnut, interactive)
 // ============================================================
-function renderSunburstChart() {
-  const catMap = getCategoryUnallocated();
+let sunburstDrilledCategory = null; // null = all, string = drilled into one
 
-  // Inner ring: categories
-  const cats = Object.entries(catMap)
+function renderSunburstChart(fundFilter = '', drilledCategory = null) {
+  if (sunburstChart) { sunburstChart.destroy(); sunburstChart = null; }
+  sunburstDrilledCategory = drilledCategory;
+
+  const catMap = getCategoryUnallocated(fundFilter);
+  const breadcrumb = document.getElementById('sunburst-breadcrumb');
+
+  // All categories sorted
+  const allCats = Object.entries(catMap)
     .filter(([, v]) => v.budget > 0)
     .sort((a, b) => b[1].budget - a[1].budget);
 
-  const innerLabels = cats.map(([k]) => k);
-  const innerData = cats.map(([, v]) => v.budget);
-  const innerColors = cats.map(([, ], i) => PALETTE[i % PALETTE.length]);
+  // Build a stable color mapping (category name -> palette index)
+  const catColorMap = {};
+  allCats.forEach(([k], i) => { catColorMap[k] = PALETTE[i % PALETTE.length]; });
 
-  // Outer ring: SOWs + unallocated per category
-  const outerLabels = [];
-  const outerData = [];
-  const outerColors = [];
+  if (drilledCategory && catMap[drilledCategory]) {
+    // --- DRILLED-IN VIEW: single category expanded ---
+    const v = catMap[drilledCategory];
+    const baseColor = catColorMap[drilledCategory];
 
-  cats.forEach(([cat, v], catIdx) => {
-    const baseColor = PALETTE[catIdx % PALETTE.length];
-    // Each SOW
-    v.sows.forEach(sow => {
-      outerLabels.push(`${sow.vendor || sow.description}`);
+    const innerLabels = [drilledCategory];
+    const innerData = [v.budget];
+    const innerColors = [baseColor];
+
+    const outerLabels = [];
+    const outerData = [];
+    const outerColors = [];
+
+    v.sows.forEach((sow, i) => {
+      outerLabels.push(sow.vendor || sow.description);
       outerData.push(sow.committed_fy26);
-      outerColors.push(baseColor + 'BB');
+      // Vary shade per SOW
+      const opacity = Math.max(0.4, 1 - i * 0.08);
+      outerColors.push(baseColor + Math.round(opacity * 255).toString(16).padStart(2, '0'));
     });
-    // Unallocated slice
     const unalloc = Math.max(0, v.budget - v.sowCommitted);
     if (unalloc > 0) {
-      outerLabels.push(`${cat} - Unallocated`);
+      outerLabels.push('Unallocated');
       outerData.push(unalloc);
-      outerColors.push(baseColor + '44');
+      outerColors.push(baseColor + '33');
     }
-  });
 
-  new Chart(document.getElementById('chart-sunburst'), {
-    type: 'doughnut',
-    data: {
-      labels: [...innerLabels, ...outerLabels],
-      datasets: [
-        {
-          label: 'Category',
-          data: innerData,
-          backgroundColor: innerColors,
-          borderColor: 'rgba(2, 6, 23, 0.8)',
-          borderWidth: 2,
-          weight: 1,
-        },
-        {
-          label: 'SOWs & Unallocated',
-          data: outerData,
-          backgroundColor: outerColors,
-          borderColor: 'rgba(2, 6, 23, 0.6)',
-          borderWidth: 1,
-          weight: 2,
-        },
-      ],
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      cutout: '25%',
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          callbacks: {
-            label: (ctx) => {
-              const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
-              const pctVal = ((ctx.raw / total) * 100).toFixed(1);
-              return ` ${ctx.label}: ${fmtFull(ctx.raw)} (${pctVal}%)`;
+    breadcrumb.innerHTML = `<span class="breadcrumb-link" id="sunburst-back">All Categories</span> <span class="breadcrumb-sep">/</span> <span class="breadcrumb-current">${drilledCategory}</span>`;
+    document.getElementById('sunburst-back').addEventListener('click', () => {
+      const fund = document.getElementById('filter-sunburst-fund').value;
+      renderSunburstChart(fund, null);
+    });
+
+    sunburstChart = new Chart(document.getElementById('chart-sunburst'), {
+      type: 'doughnut',
+      data: {
+        labels: [...innerLabels, ...outerLabels],
+        datasets: [
+          { label: 'Category', data: innerData, backgroundColor: innerColors, borderColor: 'rgba(2, 6, 23, 0.8)', borderWidth: 2, weight: 1 },
+          { label: 'SOWs & Unallocated', data: outerData, backgroundColor: outerColors, borderColor: 'rgba(2, 6, 23, 0.6)', borderWidth: 1, weight: 2 },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        cutout: '25%',
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => {
+                const total = ctx.datasetIndex === 0 ? v.budget : outerData.reduce((a, b) => a + b, 0);
+                const pctVal = total > 0 ? ((ctx.raw / total) * 100).toFixed(1) : '0.0';
+                return ` ${ctx.label}: ${fmtFull(ctx.raw)} (${pctVal}% of ${ctx.datasetIndex === 0 ? 'total' : drilledCategory})`;
+              },
             },
           },
         },
       },
-    },
-  });
+    });
+  } else {
+    // --- ALL-CATEGORIES VIEW ---
+    breadcrumb.innerHTML = '<span class="breadcrumb-current">All Categories</span> <span class="text-xs text-slate-600">(click a slice to drill in)</span>';
+
+    const cats = allCats;
+    const innerLabels = cats.map(([k]) => k);
+    const innerData = cats.map(([, v]) => v.budget);
+    const innerColors = cats.map(([k]) => catColorMap[k]);
+
+    const outerLabels = [];
+    const outerData = [];
+    const outerColors = [];
+    // Track which category each outer slice belongs to
+    const outerCategoryIndex = [];
+
+    cats.forEach(([cat, v], catIdx) => {
+      const baseColor = catColorMap[cat];
+      v.sows.forEach(sow => {
+        outerLabels.push(sow.vendor || sow.description);
+        outerData.push(sow.committed_fy26);
+        outerColors.push(baseColor + 'BB');
+        outerCategoryIndex.push(catIdx);
+      });
+      const ua = Math.max(0, v.budget - v.sowCommitted);
+      if (ua > 0) {
+        outerLabels.push(`${cat} - Unallocated`);
+        outerData.push(ua);
+        outerColors.push(baseColor + '44');
+        outerCategoryIndex.push(catIdx);
+      }
+    });
+
+    const totalBudget = innerData.reduce((a, b) => a + b, 0);
+
+    sunburstChart = new Chart(document.getElementById('chart-sunburst'), {
+      type: 'doughnut',
+      data: {
+        labels: [...innerLabels, ...outerLabels],
+        datasets: [
+          { label: 'Category', data: innerData, backgroundColor: innerColors, borderColor: 'rgba(2, 6, 23, 0.8)', borderWidth: 2, weight: 1 },
+          { label: 'SOWs & Unallocated', data: outerData, backgroundColor: outerColors, borderColor: 'rgba(2, 6, 23, 0.6)', borderWidth: 1, weight: 2 },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        cutout: '25%',
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => {
+                if (ctx.datasetIndex === 0) {
+                  const pctVal = totalBudget > 0 ? ((ctx.raw / totalBudget) * 100).toFixed(1) : '0.0';
+                  return ` ${ctx.label}: ${fmtFull(ctx.raw)} (${pctVal}% of total)`;
+                } else {
+                  const catIdx = outerCategoryIndex[ctx.dataIndex];
+                  const parentBudget = innerData[catIdx];
+                  const pctVal = parentBudget > 0 ? ((ctx.raw / parentBudget) * 100).toFixed(1) : '0.0';
+                  return ` ${ctx.label}: ${fmtFull(ctx.raw)} (${pctVal}% of ${innerLabels[catIdx]})`;
+                }
+              },
+            },
+          },
+        },
+        onClick: (event, elements) => {
+          if (elements.length === 0) return;
+          const el = elements[0];
+          let catName;
+          if (el.datasetIndex === 0) {
+            catName = innerLabels[el.index];
+          } else {
+            const catIdx = outerCategoryIndex[el.index];
+            catName = innerLabels[catIdx];
+          }
+          if (catName) {
+            const fund = document.getElementById('filter-sunburst-fund').value;
+            renderSunburstChart(fund, catName);
+          }
+        },
+      },
+    });
+  }
+}
+
+// ============================================================
+// 13g. Vendor Spend Analysis Chart
+// ============================================================
+function renderVendorChart(fundFilter = '', vendorFilter = '') {
+  if (vendorChart) { vendorChart.destroy(); vendorChart = null; }
+
+  // Only SOW rows with a non-empty vendor
+  let items = budgetData.line_items.filter(i => i.event_type === 'SOW' && i.vendor && i.vendor.trim() !== '');
+  if (fundFilter) items = items.filter(i => i.source_fund === fundFilter);
+
+  if (vendorFilter) {
+    // Show selected vendor's spend by category
+    const vendorItems = items.filter(i => i.vendor === vendorFilter);
+    const catMap = {};
+    vendorItems.forEach(i => {
+      const cat = i.category || 'Other';
+      catMap[cat] = (catMap[cat] || 0) + i.committed_fy26;
+    });
+    const entries = Object.entries(catMap).sort((a, b) => b[1] - a[1]);
+    const labels = entries.map(([k]) => k);
+    const values = entries.map(([, v]) => v);
+
+    vendorChart = new Chart(document.getElementById('chart-vendor'), {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [{
+          label: vendorFilter,
+          data: values,
+          backgroundColor: PALETTE.slice(0, labels.length).map(c => c + '99'),
+          borderColor: PALETTE.slice(0, labels.length),
+          borderWidth: 1,
+          borderRadius: 6,
+          barPercentage: 0.7,
+        }],
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          tooltip: { callbacks: { label: (ctx) => ` ${ctx.label}: ${fmtFull(ctx.raw)}` } },
+        },
+        scales: {
+          x: { grid: { color: 'rgba(51, 65, 85, 0.2)' }, ticks: { callback: (v) => fmt(v) } },
+          y: { grid: { display: false }, ticks: { font: { size: 11 } } },
+        },
+      },
+    });
+  } else {
+    // Show all vendors aggregated
+    const vendorMap = {};
+    items.forEach(i => {
+      vendorMap[i.vendor] = (vendorMap[i.vendor] || 0) + i.committed_fy26;
+    });
+    const entries = Object.entries(vendorMap).sort((a, b) => b[1] - a[1]);
+    const labels = entries.map(([k]) => k);
+    const values = entries.map(([, v]) => v);
+
+    vendorChart = new Chart(document.getElementById('chart-vendor'), {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [{
+          label: 'Committed',
+          data: values,
+          backgroundColor: PALETTE.slice(0, labels.length).map(c => c + '99'),
+          borderColor: PALETTE.slice(0, labels.length),
+          borderWidth: 1,
+          borderRadius: 6,
+          barPercentage: 0.7,
+        }],
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          tooltip: { callbacks: { label: (ctx) => ` ${fmtFull(ctx.raw)}` } },
+        },
+        scales: {
+          x: { grid: { color: 'rgba(51, 65, 85, 0.2)' }, ticks: { callback: (v) => fmt(v) } },
+          y: { grid: { display: false }, ticks: { font: { size: 11 } } },
+        },
+      },
+    });
+  }
 }
 
 // ============================================================
@@ -1550,14 +1742,50 @@ document.addEventListener('DOMContentLoaded', () => {
   renderCategoryChart();
   renderFundChart();
   renderExpenseChart();
+
+  // --- Approved vs Committed (with fund filter) ---
+  const acFundSelect = document.getElementById('filter-ac-fund');
+  populateFundFilter(acFundSelect);
   renderApprovedCommittedChart();
-  // Budget Planning Tools
+  acFundSelect.addEventListener('change', (e) => renderApprovedCommittedChart(e.target.value));
+
+  // --- Vendor Spend Analysis (with fund + vendor filters) ---
+  const vendorFundSelect = document.getElementById('filter-vendor-fund');
+  const vendorVendorSelect = document.getElementById('filter-vendor-vendor');
+  populateFundFilter(vendorFundSelect);
+  // Populate vendor dropdown
+  const allVendors = [...new Set(
+    budgetData.line_items
+      .filter(i => i.event_type === 'SOW' && i.vendor && i.vendor.trim() !== '')
+      .map(i => i.vendor)
+  )].sort();
+  allVendors.forEach(v => {
+    const opt = document.createElement('option');
+    opt.value = v;
+    opt.textContent = v;
+    vendorVendorSelect.appendChild(opt);
+  });
+  renderVendorChart();
+  vendorFundSelect.addEventListener('change', () => renderVendorChart(vendorFundSelect.value, vendorVendorSelect.value));
+  vendorVendorSelect.addEventListener('change', () => renderVendorChart(vendorFundSelect.value, vendorVendorSelect.value));
+
+  // --- Budget Planning Tools ---
+  const unallocFundSelect = document.getElementById('filter-unalloc-fund');
+  populateFundFilter(unallocFundSelect);
   renderUnallocatedBreakdown();
+  unallocFundSelect.addEventListener('change', (e) => renderUnallocatedBreakdown(e.target.value));
+
   initHiringCalculator();
   initSOWCutSimulator();
   initScenarioPlanner();
   renderRunwayGauges();
+
+  // --- Interactive Sunburst (with fund filter) ---
+  const sunburstFundSelect = document.getElementById('filter-sunburst-fund');
+  populateFundFilter(sunburstFundSelect);
   renderSunburstChart();
+  sunburstFundSelect.addEventListener('change', (e) => renderSunburstChart(e.target.value, null));
+
   // Timeline & Variance
   renderTimelineChart();
   renderVarianceChart();

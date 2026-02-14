@@ -181,11 +181,17 @@ body {
   z-index: 50;
   box-shadow: 0 12px 40px var(--shadow-heavy);
 }
+.kpi-tooltip::before {
+  content: ''; position: absolute; top: 100%; left: 50%;
+  transform: translateX(-50%);
+  border: 7px solid transparent;
+  border-top-color: var(--tooltip-border);
+}
 .kpi-tooltip::after {
   content: ''; position: absolute; top: 100%; left: 50%;
   transform: translateX(-50%);
   border: 6px solid transparent;
-  border-top-color: var(--tooltip-border);
+  border-top-color: var(--tooltip-bg);
 }
 .kpi-card:hover .kpi-tooltip {
   opacity: 1; transform: translateX(-50%) translateY(0);
@@ -193,9 +199,11 @@ body {
 /* Keep tooltips in viewport for edge cards */
 .kpi-card:first-child .kpi-tooltip { left: 0; transform: translateX(0) translateY(6px); }
 .kpi-card:first-child:hover .kpi-tooltip { transform: translateX(0) translateY(0); }
+.kpi-card:first-child .kpi-tooltip::before { left: 1.5rem; transform: none; }
 .kpi-card:first-child .kpi-tooltip::after { left: 1.5rem; transform: none; }
 .kpi-card:last-child .kpi-tooltip { left: auto; right: 0; transform: translateX(0) translateY(6px); }
 .kpi-card:last-child:hover .kpi-tooltip { transform: translateX(0) translateY(0); }
+.kpi-card:last-child .kpi-tooltip::before { left: auto; right: 1.5rem; transform: none; }
 .kpi-card:last-child .kpi-tooltip::after { left: auto; right: 1.5rem; transform: none; }
 
 .kpi-card[data-accent="blue"]::before { background: linear-gradient(90deg, #3b82f6, #2563eb); }

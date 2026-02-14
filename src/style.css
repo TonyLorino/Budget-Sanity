@@ -156,6 +156,7 @@ body {
   border: 1px solid var(--border-primary); border-radius: 1rem;
   padding: 1.25rem 1.5rem; position: relative; overflow: visible;
   transition: all 0.3s ease;
+  display: flex; flex-direction: column;
 }
 .kpi-card::before {
   content: ''; position: absolute; top: 0; left: 0; right: 0;
@@ -208,12 +209,13 @@ body {
 .kpi-label {
   font-size: 0.75rem; font-weight: 500; color: var(--text-muted);
   text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;
+  min-height: 2rem;
 }
 .kpi-value {
   font-size: 1.75rem; font-weight: 800; color: var(--text-heading);
   line-height: 1.2; letter-spacing: -0.02em;
 }
-.kpi-sub { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.375rem; }
+.kpi-sub { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.375rem; flex: 1; }
 
 .kpi-progress {
   margin-top: 0.625rem; height: 4px;

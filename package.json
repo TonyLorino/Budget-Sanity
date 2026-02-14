@@ -10,7 +10,9 @@
     "extract": ".venv/bin/python3 extract_budget.py"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.95.3",
     "chart.js": "^4.5.1",
-    "vite": "^7.3.1"
+    "vite": "^7.3.1",
+    "xlsx": "^0.18.5"
   }
 }

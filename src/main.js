@@ -1,7 +1,12 @@
 import { Chart, registerables } from 'chart.js';
-import budgetData from './data/budget.json';
+import { createClient } from '@supabase/supabase-js';
 
 Chart.register(...registerables);
+
+// ============================================================
+// Data source: populated at runtime (Supabase or static JSON)
+// ============================================================
+let budgetData = null;
 
 // ============================================================
 // Chart.js global defaults
@@ -51,8 +56,8 @@ const isUnapproved = (eventType) => eventType === 'Unapproved Budget' || eventTy
 const isBudgetType = (eventType) => eventType === 'Budget' || eventType === 'Unapproved Budget';
 const isSOWType = (eventType) => eventType === 'SOW' || eventType === 'Unapproved SOW';
 
-// Distinct source funds from data
-const ALL_FUNDS = [...new Set(budgetData.line_items.map(i => i.source_fund))].sort();
+// Distinct source funds from data (populated in initDashboard)
+let ALL_FUNDS = [];
 
 // Reusable: populate a <select> with fund options
 function populateFundFilter(selectEl) {
@@ -93,7 +98,8 @@ function renderKPIs() {
   const pendingBudget = unapprovedBudgetRows.reduce((s, i) => s + i.budget_fy26, 0);
   const pendingSOWs = unapprovedSOWRows.reduce((s, i) => s + i.committed_fy26, 0);
 
-  const monthsElapsed = 1; // January only has actuals
+  // Count months with actuals dynamically from the totals row
+  const monthsElapsed = Math.max(1, budgetData.totals.actual_monthly.filter(v => v > 0).length);
   const burnRate = actualFY / monthsElapsed;
   const projectedAnnual = burnRate * 12;
 
@@ -104,6 +110,7 @@ function renderKPIs() {
       sub: `Approved plan baseline for FY2026`,
       accent: 'blue',
       progress: 100,
+      tooltip: 'Sum of the "Budget FY26" column for all rows where Event Type = "Budget". Represents the total amount formally approved for the fiscal year.',
     },
     {
       label: 'Forecast (Committed)',
@@ -111,6 +118,7 @@ function renderKPIs() {
       sub: `Based on approved SOWs and remainders`,
       accent: 'violet',
       progress: pct(forecastFY, approvedFY),
+      tooltip: 'Sum of the "Forecast FY" column across all approved Budget and SOW rows. Reflects the current best estimate of what will be spent based on committed SOWs and budget remainders.',
     },
     {
       label: 'Unallocated',
@@ -118,6 +126,7 @@ function renderKPIs() {
       sub: `${pctUnallocated.toFixed(1)}% of approved not yet in SOWs`,
       accent: unallocated > 0 ? 'cyan' : 'rose',
       progress: pctUnallocated,
+      tooltip: 'Approved Budget minus the sum of "Committed FY26" for SOW rows only. Shows how much approved funding has not yet been assigned to a statement of work.',
     },
     {
       label: 'Pending Approval',
@@ -125,6 +134,7 @@ function renderKPIs() {
       sub: `${unapprovedBudgetRows.length + unapprovedSOWRows.length} items awaiting approval`,
       accent: 'orange',
       progress: pct(pendingBudget, approvedFY),
+      tooltip: 'Sum of "Budget FY26" for rows with Event Type = "Unapproved Budget". These line items have been requested but not yet formally approved.',
     },
     {
       label: 'YTD Actuals',
@@ -132,6 +142,7 @@ function renderKPIs() {
       sub: `${pctSpent.toFixed(1)}% of forecast spent`,
       accent: 'emerald',
       progress: pctSpent,
+      tooltip: 'The "Actual FY" total from the Excel totals row — the sum of all actual invoiced spend recorded year-to-date across every line item.',
     },
     {
       label: 'Forecast Remaining',
@@ -139,6 +150,7 @@ function renderKPIs() {
       sub: `${(100 - pctSpent).toFixed(1)}% of forecast yet to spend`,
       accent: 'amber',
       progress: 100 - pctSpent,
+      tooltip: 'Forecast (Committed) minus YTD Actuals. Represents the dollar amount of forecasted spend that has not yet been invoiced.',
     },
     {
       label: 'Projected Annual',
@@ -148,6 +160,7 @@ function renderKPIs() {
         : `${fmt(approvedFY - projectedAnnual)} under approved budget`,
       accent: projectedAnnual > approvedFY ? 'rose' : 'emerald',
       progress: (projectedAnnual / approvedFY) * 100,
+      tooltip: `YTD Actuals ÷ months with actuals (${monthsElapsed}) × 12. Extrapolates the current monthly burn rate to a full-year estimate. Compared against Approved Budget to flag over/under-spend trajectories.`,
     },
   ];
 
@@ -156,6 +169,7 @@ function renderKPIs() {
     .map(
       (k) => `
     <div class="kpi-card" data-accent="${k.accent}">
+      ${k.tooltip ? `<div class="kpi-tooltip">${k.tooltip}</div>` : ''}
       <div class="kpi-label">${k.label}</div>
       <div class="kpi-value">${k.value}</div>
       <div class="kpi-sub">${k.sub}</div>
@@ -334,6 +348,135 @@ function renderExpenseChart() {
       },
     },
   });
+}
+
+// ============================================================
+// 4b. Spend Heatmap (Category × Month)
+// ============================================================
+function renderHeatmap(mode = 'forecast') {
+  const months = budgetData.months;
+
+  // Aggregate monthly values by category (approved rows only)
+  const approved = budgetData.line_items.filter(i => isApproved(i.event_type));
+  const categories = [...new Set(approved.map(i => i.category))];
+
+  // Build matrix: { category: [12 monthly values] }
+  const matrix = {};
+  categories.forEach(cat => {
+    const rows = approved.filter(i => i.category === cat);
+    matrix[cat] = Array.from({ length: 12 }, (_, m) => {
+      if (mode === 'forecast') {
+        return rows.reduce((s, r) => s + (r.forecast_monthly[m] || 0), 0);
+      } else if (mode === 'actuals') {
+        return rows.reduce((s, r) => s + (r.actual_monthly[m] || 0), 0);
+      } else {
+        // variance = forecast - actuals (positive = under-spend)
+        const fc = rows.reduce((s, r) => s + (r.forecast_monthly[m] || 0), 0);
+        const ac = rows.reduce((s, r) => s + (r.actual_monthly[m] || 0), 0);
+        return fc - ac;
+      }
+    });
+  });
+
+  // Find global min / max for color scaling
+  const allValues = Object.values(matrix).flat();
+  const maxVal = Math.max(...allValues, 1);
+  const minVal = Math.min(...allValues, 0);
+
+  // Color functions
+  function intensityColor(value) {
+    if (mode === 'variance') {
+      // Diverging: green for positive (under-spend), red for negative (over-spend)
+      if (value === 0) return 'rgba(100, 116, 139, 0.1)';
+      if (value > 0) {
+        const t = Math.min(value / (maxVal || 1), 1);
+        return `rgba(16, 185, 129, ${0.1 + t * 0.7})`;
+      } else {
+        const t = Math.min(Math.abs(value) / (Math.abs(minVal) || 1), 1);
+        return `rgba(244, 63, 94, ${0.1 + t * 0.7})`;
+      }
+    } else {
+      // Sequential: transparent-to-blue
+      if (value === 0) return 'rgba(100, 116, 139, 0.05)';
+      const t = Math.min(value / (maxVal || 1), 1);
+      return `rgba(59, 130, 246, ${0.08 + t * 0.72})`;
+    }
+  }
+
+  function textColor(value) {
+    if (mode === 'variance') {
+      if (value === 0) return 'var(--color-slate-600)';
+      const absRatio = Math.abs(value) / ((value > 0 ? maxVal : Math.abs(minVal)) || 1);
+      return absRatio > 0.45 ? '#fff' : 'var(--color-slate-300)';
+    } else {
+      if (value === 0) return 'var(--color-slate-600)';
+      const ratio = value / (maxVal || 1);
+      return ratio > 0.45 ? '#fff' : 'var(--color-slate-300)';
+    }
+  }
+
+  // Row totals for the right-most column
+  const rowTotals = {};
+  categories.forEach(cat => {
+    rowTotals[cat] = matrix[cat].reduce((s, v) => s + v, 0);
+  });
+
+  // Build HTML table
+  let html = `<table class="heatmap-table">`;
+  html += `<thead><tr><th class="heatmap-th heatmap-th-cat">Category</th>`;
+  months.forEach(m => { html += `<th class="heatmap-th">${m}</th>`; });
+  html += `<th class="heatmap-th heatmap-th-total">Total</th>`;
+  html += `</tr></thead><tbody>`;
+
+  categories.forEach(cat => {
+    html += `<tr class="heatmap-row">`;
+    html += `<td class="heatmap-td heatmap-cat-label">${cat}</td>`;
+    matrix[cat].forEach((val, m) => {
+      const bg = intensityColor(val);
+      const fg = textColor(val);
+      const display = val === 0 ? '—' : fmt(val);
+      const fullVal = val === 0 ? '$0' : fmtFull(val);
+      html += `<td class="heatmap-td heatmap-cell" style="background:${bg};color:${fg}" title="${cat} · ${months[m]}: ${fullVal}">${display}</td>`;
+    });
+    // Total
+    const total = rowTotals[cat];
+    html += `<td class="heatmap-td heatmap-total-cell" title="${cat} Total: ${fmtFull(total)}">${fmt(total)}</td>`;
+    html += `</tr>`;
+  });
+
+  // Footer: column totals
+  html += `</tbody><tfoot><tr class="heatmap-foot-row">`;
+  html += `<td class="heatmap-td heatmap-cat-label" style="font-weight:700">Total</td>`;
+  const colTotals = Array.from({ length: 12 }, (_, m) =>
+    categories.reduce((s, cat) => s + matrix[cat][m], 0)
+  );
+  const grandTotal = colTotals.reduce((s, v) => s + v, 0);
+  colTotals.forEach((val, m) => {
+    const bg = intensityColor(val);
+    const fg = textColor(val);
+    const display = val === 0 ? '—' : fmt(val);
+    html += `<td class="heatmap-td heatmap-cell heatmap-foot-cell" style="background:${bg};color:${fg}" title="All Categories · ${months[m]}: ${fmtFull(val)}">${display}</td>`;
+  });
+  html += `<td class="heatmap-td heatmap-total-cell heatmap-foot-cell" title="Grand Total: ${fmtFull(grandTotal)}">${fmt(grandTotal)}</td>`;
+  html += `</tr></tfoot></table>`;
+
+  document.getElementById('heatmap-container').innerHTML = html;
+
+  // Legend
+  const legendEl = document.getElementById('heatmap-legend');
+  if (mode === 'variance') {
+    legendEl.innerHTML = `
+      <span class="text-xs text-slate-500">Over-spend</span>
+      <div class="heatmap-legend-bar heatmap-legend-diverging"></div>
+      <span class="text-xs text-slate-500">Under-spend</span>
+    `;
+  } else {
+    legendEl.innerHTML = `
+      <span class="text-xs text-slate-500">Low</span>
+      <div class="heatmap-legend-bar heatmap-legend-sequential"></div>
+      <span class="text-xs text-slate-500">High</span>
+    `;
+  }
 }
 
 // ============================================================
@@ -1690,7 +1833,135 @@ function renderVendorChart(fundFilter = '', vendorFilter = '') {
 }
 
 // ============================================================
-// 14. Refresh from Excel
+// 14. Upload Panel (admin only)
+// ============================================================
+function initUploadPanel() {
+  const panel = document.getElementById('upload-panel');
+  if (!panel) return;
+
+  // Show upload panel only if ?admin=SECRET is in URL
+  const params = new URLSearchParams(window.location.search);
+  const adminSecret = params.get('admin');
+  if (!adminSecret) {
+    panel.remove();
+    return;
+  }
+  panel.classList.remove('hidden');
+
+  const dropZone = document.getElementById('upload-drop-zone');
+  const fileInput = document.getElementById('upload-file-input');
+  const preview = document.getElementById('upload-preview');
+  const confirmBtn = document.getElementById('upload-confirm');
+  const cancelBtn = document.getElementById('upload-cancel');
+  const statusEl = document.getElementById('upload-status');
+
+  let pendingData = null;
+
+  function showStatus(msg, isError = false) {
+    statusEl.textContent = msg;
+    statusEl.style.color = isError ? '#fb7185' : '#34d399';
+    statusEl.classList.remove('hidden');
+  }
+
+  function hideStatus() {
+    statusEl.classList.add('hidden');
+  }
+
+  async function handleFile(file) {
+    hideStatus();
+    showStatus('Parsing Excel file...', false);
+
+    try {
+      const { read } = await import('xlsx');
+      const { extractBudget } = await import('./extract.js');
+
+      const arrayBuffer = await file.arrayBuffer();
+      const workbook = read(arrayBuffer, { type: 'array' });
+      const data = extractBudget(workbook);
+
+      pendingData = data;
+
+      // Show preview
+      const approvedBudgetRows = data.line_items.filter(i => i.event_type === 'Budget');
+      const totalApproved = approvedBudgetRows.reduce((s, i) => s + i.budget_fy26, 0);
+
+      preview.innerHTML = `
+        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:0.5rem;">
+          <div><span style="color:var(--color-slate-500)">Line Items:</span> <strong>${data.line_items.length}</strong></div>
+          <div><span style="color:var(--color-slate-500)">Approved Budget:</span> <strong>$${(totalApproved/1e6).toFixed(2)}M</strong></div>
+          <div><span style="color:var(--color-slate-500)">Committed:</span> <strong>$${(data.totals.committed_fy26/1e6).toFixed(2)}M</strong></div>
+          <div><span style="color:var(--color-slate-500)">YTD Actuals:</span> <strong>$${(data.totals.actual_fy/1e3).toFixed(0)}K</strong></div>
+        </div>
+      `;
+      preview.classList.remove('hidden');
+      confirmBtn.classList.remove('hidden');
+      cancelBtn.classList.remove('hidden');
+      statusEl.classList.add('hidden');
+    } catch (err) {
+      showStatus(`Parse error: ${err.message}`, true);
+      console.error('Excel parse error:', err);
+    }
+  }
+
+  // Drag and drop
+  dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('upload-drag-active'); });
+  dropZone.addEventListener('dragleave', () => { dropZone.classList.remove('upload-drag-active'); });
+  dropZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropZone.classList.remove('upload-drag-active');
+    const file = e.dataTransfer.files[0];
+    if (file) handleFile(file);
+  });
+
+  // Click to browse
+  dropZone.addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', () => {
+    const file = fileInput.files[0];
+    if (file) handleFile(file);
+  });
+
+  // Cancel
+  cancelBtn.addEventListener('click', () => {
+    pendingData = null;
+    preview.classList.add('hidden');
+    confirmBtn.classList.add('hidden');
+    cancelBtn.classList.add('hidden');
+    hideStatus();
+  });
+
+  // Confirm upload
+  confirmBtn.addEventListener('click', async () => {
+    if (!pendingData) return;
+    confirmBtn.disabled = true;
+    showStatus('Uploading to server...', false);
+
+    try {
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${adminSecret}`,
+        },
+        body: JSON.stringify(pendingData),
+      });
+
+      const result = await res.json();
+      if (result.ok) {
+        showStatus('Upload successful! Reloading...', false);
+        setTimeout(() => location.reload(), 800);
+      } else {
+        showStatus(`Upload failed: ${result.error || 'Unknown error'}`, true);
+        confirmBtn.disabled = false;
+      }
+    } catch (err) {
+      showStatus(`Network error: ${err.message}`, true);
+      confirmBtn.disabled = false;
+    }
+  });
+}
+
+// ============================================================
+// 15. Refresh Button (mode-aware)
 // ============================================================
 function initRefreshButton() {
   const btn = document.getElementById('refresh-btn');
@@ -1699,45 +1970,121 @@ function initRefreshButton() {
 
   if (!btn) return;
 
+  const isProduction = !!SUPABASE_URL;
+
   btn.addEventListener('click', async () => {
-    // Prevent double-clicks
     if (btn.disabled) return;
     btn.disabled = true;
 
-    // Spinning animation
     icon.style.animation = 'spin 0.8s linear infinite';
-    status.textContent = 'Extracting...';
     status.classList.remove('hidden');
 
-    try {
-      const res = await fetch('/__extract', { method: 'POST' });
-      const data = await res.json();
-
-      if (data.ok) {
-        status.textContent = 'Done! Reloading...';
-        // Short delay so the user sees the success message
-        setTimeout(() => location.reload(), 600);
-      } else {
-        status.textContent = 'Error — check console';
-        console.error('Extract failed:', data.error);
+    if (isProduction) {
+      // Production: re-fetch from Supabase
+      status.textContent = 'Fetching latest...';
+      try {
+        const result = await fetchFromSupabase();
+        if (result) {
+          budgetData = result.budgetData;
+          status.textContent = 'Updated! Reloading...';
+          setTimeout(() => location.reload(), 600);
+        } else {
+          status.textContent = 'No data found';
+          icon.style.animation = '';
+          btn.disabled = false;
+          setTimeout(() => status.classList.add('hidden'), 3000);
+        }
+      } catch (err) {
+        status.textContent = 'Fetch error';
+        console.error('Supabase fetch failed:', err);
         icon.style.animation = '';
         btn.disabled = false;
         setTimeout(() => status.classList.add('hidden'), 3000);
       }
-    } catch (err) {
-      status.textContent = 'Network error';
-      console.error('Extract request failed:', err);
-      icon.style.animation = '';
-      btn.disabled = false;
-      setTimeout(() => status.classList.add('hidden'), 3000);
+    } else {
+      // Local dev: run Python extraction
+      status.textContent = 'Extracting...';
+      try {
+        const res = await fetch('/__extract', { method: 'POST' });
+        const data = await res.json();
+
+        if (data.ok) {
+          status.textContent = 'Done! Reloading...';
+          setTimeout(() => location.reload(), 600);
+        } else {
+          status.textContent = 'Error — check console';
+          console.error('Extract failed:', data.error);
+          icon.style.animation = '';
+          btn.disabled = false;
+          setTimeout(() => status.classList.add('hidden'), 3000);
+        }
+      } catch (err) {
+        status.textContent = 'Network error';
+        console.error('Extract request failed:', err);
+        icon.style.animation = '';
+        btn.disabled = false;
+        setTimeout(() => status.classList.add('hidden'), 3000);
+      }
     }
   });
 }
 
 // ============================================================
-// Initialize
+// Supabase client (only if env vars are set)
 // ============================================================
-document.addEventListener('DOMContentLoaded', () => {
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || '';
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+const supabase = SUPABASE_URL && SUPABASE_ANON_KEY
+  ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+  : null;
+
+/**
+ * Fetch budget data from Supabase (latest snapshot).
+ * Returns null if unavailable or not configured.
+ */
+async function fetchFromSupabase() {
+  if (!supabase) return null;
+  try {
+    const { data, error } = await supabase
+      .from('budget_snapshots')
+      .select('data, uploaded_at')
+      .order('id', { ascending: false })
+      .limit(1)
+      .single();
+    if (error || !data) return null;
+    return { budgetData: data.data, uploadedAt: data.uploaded_at };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Load data from the best available source:
+ * 1. Supabase (production)
+ * 2. Static JSON (local dev fallback)
+ */
+async function loadBudgetData() {
+  // Try Supabase first
+  const remote = await fetchFromSupabase();
+  if (remote) {
+    return { data: remote.budgetData, source: 'supabase', uploadedAt: remote.uploadedAt };
+  }
+
+  // Fallback: static JSON (bundled at build time for local dev)
+  try {
+    const mod = await import('./data/budget.json');
+    return { data: mod.default, source: 'local', uploadedAt: null };
+  } catch {
+    return { data: null, source: 'none', uploadedAt: null };
+  }
+}
+
+// ============================================================
+// Initialize dashboard with data
+// ============================================================
+function initDashboard() {
+  ALL_FUNDS = [...new Set(budgetData.line_items.map(i => i.source_fund))].sort();
+
   renderKPIs();
   renderCategoryChart();
   renderFundChart();
@@ -1786,6 +2133,16 @@ document.addEventListener('DOMContentLoaded', () => {
   renderSunburstChart();
   sunburstFundSelect.addEventListener('change', (e) => renderSunburstChart(e.target.value, null));
 
+  // --- Spend Heatmap (with mode toggle) ---
+  renderHeatmap('forecast');
+  document.querySelectorAll('#heatmap-mode-toggle .calc-toggle-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#heatmap-mode-toggle .calc-toggle-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      renderHeatmap(btn.dataset.mode);
+    });
+  });
+
   // Timeline & Variance
   renderTimelineChart();
   renderVarianceChart();
@@ -1794,8 +2151,52 @@ document.addEventListener('DOMContentLoaded', () => {
   renderTable();
   renderAudit();
   renderRecommendations();
+}
+
+/**
+ * Show an empty state when no data is available.
+ */
+function showEmptyState() {
+  const main = document.querySelector('main');
+  main.innerHTML = `
+    <div style="text-align:center; padding:8rem 2rem;">
+      <div style="font-size:3rem; margin-bottom:1rem;">📊</div>
+      <h2 style="font-size:1.5rem; font-weight:700; color:var(--color-slate-200); margin-bottom:0.5rem;">No Budget Data Yet</h2>
+      <p style="color:var(--color-slate-500); max-width:400px; margin:0 auto;">
+        Upload an Excel file to get started. Add <code style="background:rgba(51,65,85,0.4);padding:0.125rem 0.375rem;border-radius:0.25rem;">?admin=YOUR_SECRET</code> to the URL to access the upload panel.
+      </p>
+    </div>
+  `;
+}
+
+// ============================================================
+// Boot
+// ============================================================
+document.addEventListener('DOMContentLoaded', async () => {
+  // Non-data-dependent UI setup
   initNav();
   initScrollReveal();
   initNavbarScroll();
   initRefreshButton();
+  initUploadPanel();
+
+  // Load data
+  const result = await loadBudgetData();
+  if (!result.data) {
+    showEmptyState();
+    return;
+  }
+
+  budgetData = result.data;
+
+  // Update the "Updated" date in the header if we know when data was uploaded
+  if (result.uploadedAt) {
+    const dateEl = document.querySelector('header .text-slate-500 span');
+    if (dateEl) {
+      const d = new Date(result.uploadedAt);
+      dateEl.textContent = `Updated ${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+    }
+  }
+
+  initDashboard();
 });

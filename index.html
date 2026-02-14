@@ -21,6 +21,7 @@
         <a href="#overview" class="nav-link">Overview</a>
         <a href="#breakdown" class="nav-link">Breakdown</a>
         <a href="#planning" class="nav-link">Planning</a>
+        <a href="#heatmap" class="nav-link">Heatmap</a>
         <a href="#timeline" class="nav-link">Timeline</a>
         <a href="#line-items" class="nav-link">Line Items</a>
         <a href="#audit" class="nav-link">Audit</a>
@@ -41,12 +42,31 @@
       <a href="#overview" class="mobile-nav-link">Overview</a>
       <a href="#breakdown" class="mobile-nav-link">Breakdown</a>
       <a href="#planning" class="mobile-nav-link">Planning</a>
+      <a href="#heatmap" class="mobile-nav-link">Heatmap</a>
       <a href="#timeline" class="mobile-nav-link">Timeline</a>
       <a href="#line-items" class="mobile-nav-link">Line Items</a>
       <a href="#audit" class="mobile-nav-link">Audit</a>
       <a href="#recommendations" class="mobile-nav-link">Recommendations</a>
     </div>
   </nav>
+
+  <!-- Upload Panel (admin only, hidden by default) -->
+  <div id="upload-panel" class="hidden" style="position:fixed;top:4rem;right:1.5rem;z-index:40;width:380px;">
+    <div class="card" style="border-color:rgba(59,130,246,0.3);box-shadow:0 8px 32px rgba(0,0,0,0.4);">
+      <h3 class="card-title" style="color:#60a5fa;">Upload Budget File</h3>
+      <div id="upload-drop-zone" class="upload-drop-zone">
+        <svg class="w-8 h-8" style="margin:0 auto 0.5rem;color:var(--color-slate-500);" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
+        <p class="text-sm text-slate-400">Drop <code>.xlsx</code> file here or click to browse</p>
+        <input type="file" id="upload-file-input" accept=".xlsx,.xls" class="hidden" />
+      </div>
+      <div id="upload-preview" class="hidden" style="margin-top:0.75rem;padding:0.75rem;background:rgba(15,23,42,0.5);border-radius:0.5rem;font-size:0.8125rem;color:var(--color-slate-300);"></div>
+      <div style="margin-top:0.75rem;display:flex;gap:0.5rem;">
+        <button id="upload-confirm" class="hidden scenario-btn scenario-btn-primary" style="flex:1;">Confirm Upload</button>
+        <button id="upload-cancel" class="hidden scenario-btn scenario-btn-ghost">Cancel</button>
+      </div>
+      <div id="upload-status" class="hidden" style="margin-top:0.5rem;font-size:0.75rem;"></div>
+    </div>
+  </div>
 
   <main class="max-w-[1440px] mx-auto px-6 pt-24 pb-16">
 
@@ -293,6 +313,26 @@
           </table>
         </div>
         <div id="scenario-summary" class="mt-4"></div>
+      </div>
+    </section>
+
+    <!-- Spend Heatmap -->
+    <section id="heatmap" class="mb-16 scroll-mt-24 animate-fade-in-up">
+      <div class="section-header">
+        <h2 class="section-title">Spend Heatmap</h2>
+        <p class="section-subtitle">Monthly intensity by category — spot seasonal patterns and outliers at a glance</p>
+      </div>
+      <div class="card">
+        <div class="flex flex-wrap items-center gap-4 mb-4">
+          <h3 class="card-title mb-0">Category &times; Month</h3>
+          <div class="calc-toggle" id="heatmap-mode-toggle" style="max-width:380px">
+            <button class="calc-toggle-btn active" data-mode="forecast">Forecast</button>
+            <button class="calc-toggle-btn" data-mode="actuals">Actuals</button>
+            <button class="calc-toggle-btn" data-mode="variance">Variance</button>
+          </div>
+        </div>
+        <div id="heatmap-container" class="overflow-x-auto"></div>
+        <div id="heatmap-legend" class="flex items-center gap-2 mt-3"></div>
       </div>
     </section>
 

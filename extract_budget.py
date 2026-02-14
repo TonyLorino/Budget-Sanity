@@ -71,8 +71,18 @@ def extract() -> dict:
     # CO-CR (93-96) BvA quarterly Q1-Q4
     # CS=97 BvA FY26
 
+    # ---- Detect totals row dynamically ----
+    # Scan down from row 3 to find the row whose column-A value is "Total"
+    totals_row = None
+    for r in range(3, ws.max_row + 1):
+        if str(ws.cell(r, 1).value or "").strip().lower() == "total":
+            totals_row = r
+            break
+    if totals_row is None:
+        totals_row = ws.max_row  # fallback
+
     line_items = []
-    for row_idx in range(3, 52):  # rows 3-51
+    for row_idx in range(3, totals_row):  # all data rows up to the totals row
         category = ws.cell(row_idx, 1).value
         event_type = ws.cell(row_idx, 2).value
         if not event_type:
@@ -134,21 +144,22 @@ def extract() -> dict:
 
     metadata["total_line_items"] = len(line_items)
 
-    # ---- Totals row (row 52) ----
+    # ---- Totals row (dynamically detected) ----
+    tr = totals_row
     totals = {
-        "budget_fy26": _safe_float(ws.cell(52, 11).value),
-        "committed_fy26": _safe_float(ws.cell(52, 12).value),
-        "budget_monthly": [_safe_float(ws.cell(52, 13 + m).value) for m in range(12)],
-        "budget_quarterly": [_safe_float(ws.cell(52, 25 + q).value) for q in range(4)],
-        "budget_fy": _safe_float(ws.cell(52, 29).value),
-        "forecast_monthly": [_safe_float(ws.cell(52, 30 + m).value) for m in range(12)],
-        "forecast_quarterly": [_safe_float(ws.cell(52, 42 + q).value) for q in range(4)],
-        "forecast_fy": _safe_float(ws.cell(52, 46).value),
-        "actual_monthly": [_safe_float(ws.cell(52, 47 + m).value) for m in range(12)],
-        "actual_quarterly": [_safe_float(ws.cell(52, 59 + q).value) for q in range(4)],
-        "actual_fy": _safe_float(ws.cell(52, 63).value),
-        "bvf_fy": _safe_float(ws.cell(52, 80).value),
-        "bva_fy": _safe_float(ws.cell(52, 97).value),
+        "budget_fy26": _safe_float(ws.cell(tr, 11).value),
+        "committed_fy26": _safe_float(ws.cell(tr, 12).value),
+        "budget_monthly": [_safe_float(ws.cell(tr, 13 + m).value) for m in range(12)],
+        "budget_quarterly": [_safe_float(ws.cell(tr, 25 + q).value) for q in range(4)],
+        "budget_fy": _safe_float(ws.cell(tr, 29).value),
+        "forecast_monthly": [_safe_float(ws.cell(tr, 30 + m).value) for m in range(12)],
+        "forecast_quarterly": [_safe_float(ws.cell(tr, 42 + q).value) for q in range(4)],
+        "forecast_fy": _safe_float(ws.cell(tr, 46).value),
+        "actual_monthly": [_safe_float(ws.cell(tr, 47 + m).value) for m in range(12)],
+        "actual_quarterly": [_safe_float(ws.cell(tr, 59 + q).value) for q in range(4)],
+        "actual_fy": _safe_float(ws.cell(tr, 63).value),
+        "bvf_fy": _safe_float(ws.cell(tr, 80).value),
+        "bva_fy": _safe_float(ws.cell(tr, 97).value),
     }
 
     # ---- Aggregations ----

@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { timingSafeEqual } from 'node:crypto';
 
 export default async function handler(req, res) {
   // Only accept POST
@@ -9,12 +10,16 @@ export default async function handler(req, res) {
   // Validate passphrase
   const uploadSecret = process.env.UPLOAD_SECRET;
   if (!uploadSecret) {
-    return res.status(500).json({ ok: false, error: 'Server misconfigured: UPLOAD_SECRET not set' });
+    return res.status(500).json({ ok: false, error: 'Server misconfigured' });
   }
 
   const auth = req.headers.authorization || '';
   const token = auth.replace(/^Bearer\s+/i, '');
-  if (token !== uploadSecret) {
+
+  // Constant-time comparison to prevent timing attacks
+  const tokenBuf = Buffer.from(token);
+  const secretBuf = Buffer.from(uploadSecret);
+  if (tokenBuf.length !== secretBuf.length || !timingSafeEqual(tokenBuf, secretBuf)) {
     return res.status(403).json({ ok: false, error: 'Invalid passphrase' });
   }
 
@@ -40,7 +45,7 @@ export default async function handler(req, res) {
 
   if (error) {
     console.error('Supabase insert error:', error);
-    return res.status(500).json({ ok: false, error: error.message });
+    return res.status(500).json({ ok: false, error: 'Database write failed. Check server logs.' });
   }
 
   return res.status(200).json({ ok: true });

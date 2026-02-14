@@ -25,14 +25,31 @@ Chart.defaults.animation.easing = 'easeOutQuart';
 // ============================================================
 // Helpers
 // ============================================================
+
+/** Escape HTML special characters to prevent XSS when injecting into innerHTML. */
+function esc(str) {
+  if (str == null) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 const fmt = (n) => {
+  if (n == null || isNaN(n)) return '$0';
+  n = Number(n);
   if (Math.abs(n) >= 1_000_000) return '$' + (n / 1_000_000).toFixed(2) + 'M';
   if (Math.abs(n) >= 1_000) return '$' + (n / 1_000).toFixed(0) + 'K';
   return '$' + n.toFixed(0);
 };
 
-const fmtFull = (n) =>
-  '$' + n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+const fmtFull = (n) => {
+  if (n == null || isNaN(n)) return '$0';
+  n = Number(n);
+  return '$' + n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+};
 
 const pct = (n, d) => (d === 0 ? 0 : ((n / d) * 100));
 
@@ -94,9 +111,9 @@ function renderKPIs() {
 
   // % of fiscal year elapsed (calendar-based, FY = Jan-Dec)
   const now = new Date();
-  const fyStart = new Date(now.getFullYear(), 0, 1);   // Jan 1
-  const fyEnd   = new Date(now.getFullYear(), 11, 31);  // Dec 31
-  const pctYearElapsed = ((now - fyStart) / (fyEnd - fyStart)) * 100;
+  const fyStart = new Date(now.getFullYear(), 0, 1);     // Jan 1
+  const fyEnd   = new Date(now.getFullYear() + 1, 0, 1); // Jan 1 next year
+  const pctYearElapsed = Math.min(100, ((now - fyStart) / (fyEnd - fyStart)) * 100);
 
   const kpis = [
     {
@@ -419,23 +436,23 @@ function renderHeatmap(mode = 'forecast') {
   // Build HTML table
   let html = `<table class="heatmap-table">`;
   html += `<thead><tr><th class="heatmap-th heatmap-th-cat">Category</th>`;
-  months.forEach(m => { html += `<th class="heatmap-th">${m}</th>`; });
+  months.forEach(m => { html += `<th class="heatmap-th">${esc(m)}</th>`; });
   html += `<th class="heatmap-th heatmap-th-total">Total</th>`;
   html += `</tr></thead><tbody>`;
 
   categories.forEach(cat => {
     html += `<tr class="heatmap-row">`;
-    html += `<td class="heatmap-td heatmap-cat-label">${cat}</td>`;
+    html += `<td class="heatmap-td heatmap-cat-label">${esc(cat)}</td>`;
     matrix[cat].forEach((val, m) => {
       const bg = intensityColor(val);
       const fg = textColor(val);
       const display = val === 0 ? '—' : fmt(val);
       const fullVal = val === 0 ? '$0' : fmtFull(val);
-      html += `<td class="heatmap-td heatmap-cell" style="background:${bg};color:${fg}" title="${cat} · ${months[m]}: ${fullVal}">${display}</td>`;
+      html += `<td class="heatmap-td heatmap-cell" style="background:${bg};color:${fg}" title="${esc(cat)} · ${esc(months[m])}: ${fullVal}">${display}</td>`;
     });
     // Total
     const total = rowTotals[cat];
-    html += `<td class="heatmap-td heatmap-total-cell" title="${cat} Total: ${fmtFull(total)}">${fmt(total)}</td>`;
+    html += `<td class="heatmap-td heatmap-total-cell" title="${esc(cat)} Total: ${fmtFull(total)}">${fmt(total)}</td>`;
     html += `</tr>`;
   });
 
@@ -450,7 +467,7 @@ function renderHeatmap(mode = 'forecast') {
     const bg = intensityColor(val);
     const fg = textColor(val);
     const display = val === 0 ? '—' : fmt(val);
-    html += `<td class="heatmap-td heatmap-cell heatmap-foot-cell" style="background:${bg};color:${fg}" title="All Categories · ${months[m]}: ${fmtFull(val)}">${display}</td>`;
+    html += `<td class="heatmap-td heatmap-cell heatmap-foot-cell" style="background:${bg};color:${fg}" title="All Categories · ${esc(months[m])}: ${fmtFull(val)}">${display}</td>`;
   });
   html += `<td class="heatmap-td heatmap-total-cell heatmap-foot-cell" title="Grand Total: ${fmtFull(grandTotal)}">${fmt(grandTotal)}</td>`;
   html += `</tr></tfoot></table>`;
@@ -845,12 +862,12 @@ function renderTable() {
       const rowClass = unapproved ? 'unapproved-row' : (isBudgetRow ? 'budget-row' : '');
 
       return `<tr class="table-row ${rowClass}">
-        <td class="table-td">${item.category || ''}</td>
-        <td class="table-td"><span class="badge ${eventBadgeClass(item.event_type)}">${item.event_type}</span></td>
-        <td class="table-td">${item.source_fund || ''}</td>
-        <td class="table-td"><span class="badge badge-${item.expense_type === 'Capex' ? 'high' : 'low'}">${item.expense_type}</span></td>
-        <td class="table-td text-slate-400">${item.vendor}</td>
-        <td class="table-td text-slate-400" style="max-width: 200px; overflow: hidden; text-overflow: ellipsis;" title="${item.description}">${item.description}</td>
+        <td class="table-td">${esc(item.category)}</td>
+        <td class="table-td"><span class="badge ${eventBadgeClass(item.event_type)}">${esc(item.event_type)}</span></td>
+        <td class="table-td">${esc(item.source_fund)}</td>
+        <td class="table-td"><span class="badge badge-${item.expense_type === 'Capex' ? 'high' : 'low'}">${esc(item.expense_type)}</span></td>
+        <td class="table-td text-slate-400">${esc(item.vendor)}</td>
+        <td class="table-td text-slate-400" style="max-width: 200px; overflow: hidden; text-overflow: ellipsis;" title="${esc(item.description)}">${esc(item.description)}</td>
         <td class="table-td text-right font-medium text-blue-400">${approvedDisplay}</td>
         <td class="table-td text-right font-medium ${committedClass}">${fmtFull(item.committed_fy26)}</td>
         <td class="table-td text-right">${fmtFull(item.forecast_fy)}</td>
@@ -955,12 +972,12 @@ function renderAudit() {
   container.innerHTML = budgetData.audit_findings
     .map(
       (f) => `
-    <div class="audit-card severity-${f.severity}">
+    <div class="audit-card severity-${esc(f.severity)}">
       <div class="flex items-center gap-2 mb-2">
-        <span class="badge badge-${f.severity}">${f.severity.toUpperCase()}</span>
-        <span class="audit-title">${f.title}</span>
+        <span class="badge badge-${esc(f.severity)}">${esc((f.severity || '').toUpperCase())}</span>
+        <span class="audit-title">${esc(f.title)}</span>
       </div>
-      <p class="audit-detail">${f.detail}</p>
+      <p class="audit-detail">${esc(f.detail)}</p>
     </div>
   `
     )
@@ -977,11 +994,11 @@ function renderRecommendations() {
       (r) => `
     <div class="rec-card">
       <div class="flex items-center gap-3">
-        <span class="rec-number priority-${r.priority}">${r.id}</span>
-        <span class="rec-title">${r.title}</span>
+        <span class="rec-number priority-${esc(r.priority)}">${esc(r.id)}</span>
+        <span class="rec-title">${esc(r.title)}</span>
       </div>
-      <p class="rec-detail">${r.detail}</p>
-      <div class="rec-impact"><strong>Impact:</strong> ${r.impact}</div>
+      <p class="rec-detail">${esc(r.detail)}</p>
+      <div class="rec-impact"><strong>Impact:</strong> ${esc(r.impact)}</div>
     </div>
   `
     )
@@ -1100,8 +1117,8 @@ function getCategoryUnallocated(fundFilter = '') {
 }
 
 function getSOWAverages() {
-  const cl = budgetData.line_items.filter(i => i.event_type === 'SOW' && i.category.includes('Contingent Labor'));
-  const ps = budgetData.line_items.filter(i => i.event_type === 'SOW' && i.category.includes('Professional Services'));
+  const cl = budgetData.line_items.filter(i => i.event_type === 'SOW' && (i.category || '').includes('Contingent Labor'));
+  const ps = budgetData.line_items.filter(i => i.event_type === 'SOW' && (i.category || '').includes('Professional Services'));
   return {
     cl: cl.length > 0 ? cl.reduce((s, i) => s + i.committed_fy26, 0) / cl.length : 250000,
     ps: ps.length > 0 ? ps.reduce((s, i) => s + i.committed_fy26, 0) / ps.length : 350000,
@@ -1191,7 +1208,7 @@ function renderUnallocatedBreakdown(fundFilter = '') {
             const pctAvail = v.budget > 0 ? (unalloc / v.budget * 100) : 0;
             const cls = unalloc < 0 ? 'val-negative' : unalloc > 0 ? 'val-positive' : 'val-zero';
             return `<tr class="table-row">
-              <td class="table-td font-medium">${cat}</td>
+              <td class="table-td font-medium">${esc(cat)}</td>
               <td class="table-td text-right">${fmtFull(v.budget)}</td>
               <td class="table-td text-right">${fmtFull(v.sowCommitted)}</td>
               <td class="table-td text-right font-semibold ${cls}">${fmtFull(unalloc)}</td>
@@ -1358,7 +1375,7 @@ function initSOWCutSimulator() {
         </div>
         <div class="calc-result-card">
           <div class="calc-result-value">${fmtFull(newUnalloc)}</div>
-          <div class="calc-result-label">${sow.category} unallocated</div>
+          <div class="calc-result-label">${esc(sow.category)} unallocated</div>
         </div>
         <div class="calc-result-card">
           <div class="calc-result-value">${fmtFull(totalUnalloc)}</div>
@@ -1411,7 +1428,7 @@ function initScenarioPlanner() {
   let nextId = 1;
 
   function catOptions() {
-    return categories.map(c => `<option value="${c}">${c}</option>`).join('');
+    return categories.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
   }
 
   function renderScenario() {
@@ -1433,10 +1450,10 @@ function initScenarioPlanner() {
         </td>
         <td class="table-td">
           <select class="table-filter scenario-cat" style="width:100%">
-            ${catOptions().replace(`value="${r.category}"`, `value="${r.category}" selected`)}
+            ${catOptions().replace(`value="${esc(r.category)}"`, `value="${esc(r.category)}" selected`)}
           </select>
         </td>
-        <td class="table-td"><input type="text" class="scenario-input scenario-desc" value="${r.description}" placeholder="Description..."></td>
+        <td class="table-td"><input type="text" class="scenario-input scenario-desc" value="${esc(r.description)}" placeholder="Description..."></td>
         <td class="table-td"><input type="number" class="scenario-input scenario-amt text-right" value="${r.amount}" min="0" step="5000"></td>
         <td class="table-td text-right font-semibold ${r.action === 'cut' ? 'val-positive' : 'val-negative'}">
           ${r.action === 'cut' ? '+' : '-'}${fmtFull(r.amount)}
@@ -1466,7 +1483,7 @@ function initScenarioPlanner() {
         ${impactEntries.map(([cat, val]) => {
           const orig = catMap[cat] ? catMap[cat].budget - catMap[cat].sowCommitted : 0;
           const newVal = orig + val;
-          return `<span class="badge ${val >= 0 ? 'badge-low' : 'badge-critical'}">${cat}: ${fmtFull(orig)} → ${fmtFull(newVal)}</span>`;
+          return `<span class="badge ${val >= 0 ? 'badge-low' : 'badge-critical'}">${esc(cat)}: ${fmtFull(orig)} → ${fmtFull(newVal)}</span>`;
         }).join('')}
       </div>`;
     } else {
@@ -1563,7 +1580,7 @@ function renderRunwayGauges() {
     return `
       <div class="runway-item">
         <div class="flex justify-between items-baseline mb-1">
-          <span class="text-sm font-medium">${cat}</span>
+          <span class="text-sm font-medium">${esc(cat)}</span>
           <span class="text-xs text-slate-500">${unalloc > 0 ? fmt(unalloc) + ' unallocated' : 'Over-committed'}</span>
         </div>
         <div class="runway-track">
@@ -1622,7 +1639,7 @@ function renderSunburstChart(fundFilter = '', drilledCategory = null) {
       outerColors.push(baseColor + '33');
     }
 
-    breadcrumb.innerHTML = `<span class="breadcrumb-link" id="sunburst-back">All Categories</span> <span class="breadcrumb-sep">/</span> <span class="breadcrumb-current">${drilledCategory}</span>`;
+    breadcrumb.innerHTML = `<span class="breadcrumb-link" id="sunburst-back">All Categories</span> <span class="breadcrumb-sep">/</span> <span class="breadcrumb-current">${esc(drilledCategory)}</span>`;
     document.getElementById('sunburst-back').addEventListener('click', () => {
       const fund = document.getElementById('filter-sunburst-fund').value;
       renderSunburstChart(fund, null);
@@ -1942,6 +1959,13 @@ function initUploadPanel() {
         body: JSON.stringify(pendingData),
       });
 
+      if (!res.ok) {
+        let msg = `Server returned ${res.status}`;
+        try { const body = await res.json(); msg = body.error || msg; } catch { /* non-JSON response */ }
+        showStatus(`Upload failed: ${msg}`, true);
+        confirmBtn.disabled = false;
+        return;
+      }
       const result = await res.json();
       if (result.ok) {
         showStatus('Upload successful! Reloading...', false);
@@ -2018,30 +2042,30 @@ function initThemeToggle() {
 function rerenderAllCharts() {
   // Destroy all existing chart instances
   Object.values(Chart.instances).forEach((instance) => {
-    instance.destroy();
+    try { instance.destroy(); } catch (e) { console.warn('Chart destroy failed:', e); }
   });
   acChart = null;
   unallocChart = null;
   vendorChart = null;
   sunburstChart = null;
 
-  // Re-render everything
-  renderKPIs();
-  renderCategoryChart();
-  renderFundChart();
-  renderExpenseChart();
-  renderApprovedCommittedChart();
-  renderVendorChart();
-  renderUnallocatedBreakdown();
-  renderRunwayGauges();
-  renderSunburstChart();
-  renderHeatmap(document.querySelector('#heatmap-mode-toggle .calc-toggle-btn.active')?.dataset.mode || 'forecast');
-  renderTimelineChart();
-  renderVarianceChart();
-  renderForecastVarianceChart();
-  renderTable();
-  renderAudit();
-  renderRecommendations();
+  // Re-render everything (isolated so one failure doesn't block the rest)
+  safeRender('KPIs', renderKPIs);
+  safeRender('CategoryChart', renderCategoryChart);
+  safeRender('FundChart', renderFundChart);
+  safeRender('ExpenseChart', renderExpenseChart);
+  safeRender('ApprovedCommittedChart', renderApprovedCommittedChart);
+  safeRender('VendorChart', renderVendorChart);
+  safeRender('UnallocatedBreakdown', renderUnallocatedBreakdown);
+  safeRender('RunwayGauges', renderRunwayGauges);
+  safeRender('SunburstChart', renderSunburstChart);
+  safeRender('Heatmap', () => renderHeatmap(document.querySelector('#heatmap-mode-toggle .calc-toggle-btn.active')?.dataset.mode || 'forecast'));
+  safeRender('TimelineChart', renderTimelineChart);
+  safeRender('VarianceChart', renderVarianceChart);
+  safeRender('ForecastVarianceChart', renderForecastVarianceChart);
+  safeRender('Table', renderTable);
+  safeRender('Audit', renderAudit);
+  safeRender('Recommendations', renderRecommendations);
 }
 
 // ============================================================
@@ -2068,7 +2092,8 @@ async function fetchFromSupabase() {
       .single();
     if (error || !data) return null;
     return { budgetData: data.data, uploadedAt: data.uploaded_at };
-  } catch {
+  } catch (err) {
+    console.warn('Supabase fetch failed:', err);
     return null;
   }
 }
@@ -2089,83 +2114,132 @@ async function loadBudgetData() {
   try {
     const mod = await import('./data/budget.json');
     return { data: mod.default, source: 'local', uploadedAt: null };
-  } catch {
+  } catch (err) {
+    console.warn('Local JSON fallback failed:', err);
     return { data: null, source: 'none', uploadedAt: null };
   }
+}
+
+/**
+ * Validate the shape of budget data before rendering.
+ * Returns an error message string if invalid, or null if valid.
+ */
+function validateBudgetData(data) {
+  if (!data || typeof data !== 'object') return 'Data is not an object';
+  if (!Array.isArray(data.line_items)) return 'Missing or invalid line_items array';
+  if (!data.totals || typeof data.totals !== 'object') return 'Missing or invalid totals object';
+  if (!Array.isArray(data.totals.budget_monthly) || data.totals.budget_monthly.length !== 12)
+    return 'Missing or invalid totals.budget_monthly';
+  if (!Array.isArray(data.totals.forecast_monthly) || data.totals.forecast_monthly.length !== 12)
+    return 'Missing or invalid totals.forecast_monthly';
+  if (!Array.isArray(data.totals.actual_monthly) || data.totals.actual_monthly.length !== 12)
+    return 'Missing or invalid totals.actual_monthly';
+  if (!data.by_category || typeof data.by_category !== 'object') return 'Missing or invalid by_category';
+  if (!data.by_source_fund || typeof data.by_source_fund !== 'object') return 'Missing or invalid by_source_fund';
+  if (!data.by_expense_type || typeof data.by_expense_type !== 'object') return 'Missing or invalid by_expense_type';
+  if (!Array.isArray(data.months) || data.months.length !== 12) return 'Missing or invalid months array';
+  if (!Array.isArray(data.audit_findings)) return 'Missing or invalid audit_findings';
+  if (!Array.isArray(data.recommendations)) return 'Missing or invalid recommendations';
+  // Coerce actual_fy to number if needed
+  if (typeof data.totals.actual_fy !== 'number')
+    data.totals.actual_fy = Number(data.totals.actual_fy) || 0;
+  return null;
 }
 
 // ============================================================
 // Initialize dashboard with data
 // ============================================================
+/** Safely call a render function, logging errors without blocking other sections. */
+function safeRender(name, fn) {
+  try {
+    fn();
+  } catch (err) {
+    console.error(`[Dashboard] ${name} failed:`, err);
+  }
+}
+
 function initDashboard() {
   ALL_FUNDS = [...new Set(budgetData.line_items.map(i => i.source_fund))].sort();
 
-  renderKPIs();
-  renderCategoryChart();
-  renderFundChart();
-  renderExpenseChart();
+  safeRender('KPIs', renderKPIs);
+  safeRender('CategoryChart', renderCategoryChart);
+  safeRender('FundChart', renderFundChart);
+  safeRender('ExpenseChart', renderExpenseChart);
 
   // --- Approved vs Committed (with fund filter) ---
-  const acFundSelect = document.getElementById('filter-ac-fund');
-  populateFundFilter(acFundSelect);
-  renderApprovedCommittedChart();
-  acFundSelect.addEventListener('change', (e) => renderApprovedCommittedChart(e.target.value));
+  safeRender('ApprovedCommitted', () => {
+    const acFundSelect = document.getElementById('filter-ac-fund');
+    if (!acFundSelect) return;
+    populateFundFilter(acFundSelect);
+    renderApprovedCommittedChart();
+    acFundSelect.addEventListener('change', (e) => renderApprovedCommittedChart(e.target.value));
+  });
 
   // --- Vendor Spend Analysis (with fund + vendor filters) ---
-  const vendorFundSelect = document.getElementById('filter-vendor-fund');
-  const vendorVendorSelect = document.getElementById('filter-vendor-vendor');
-  populateFundFilter(vendorFundSelect);
-  // Populate vendor dropdown
-  const allVendors = [...new Set(
-    budgetData.line_items
-      .filter(i => i.event_type === 'SOW' && i.vendor && i.vendor.trim() !== '')
-      .map(i => i.vendor)
-  )].sort();
-  allVendors.forEach(v => {
-    const opt = document.createElement('option');
-    opt.value = v;
-    opt.textContent = v;
-    vendorVendorSelect.appendChild(opt);
+  safeRender('VendorChart', () => {
+    const vendorFundSelect = document.getElementById('filter-vendor-fund');
+    const vendorVendorSelect = document.getElementById('filter-vendor-vendor');
+    if (!vendorFundSelect || !vendorVendorSelect) return;
+    populateFundFilter(vendorFundSelect);
+    const allVendors = [...new Set(
+      budgetData.line_items
+        .filter(i => i.event_type === 'SOW' && i.vendor && i.vendor.trim() !== '')
+        .map(i => i.vendor)
+    )].sort();
+    allVendors.forEach(v => {
+      const opt = document.createElement('option');
+      opt.value = v;
+      opt.textContent = v;
+      vendorVendorSelect.appendChild(opt);
+    });
+    renderVendorChart();
+    vendorFundSelect.addEventListener('change', () => renderVendorChart(vendorFundSelect.value, vendorVendorSelect.value));
+    vendorVendorSelect.addEventListener('change', () => renderVendorChart(vendorFundSelect.value, vendorVendorSelect.value));
   });
-  renderVendorChart();
-  vendorFundSelect.addEventListener('change', () => renderVendorChart(vendorFundSelect.value, vendorVendorSelect.value));
-  vendorVendorSelect.addEventListener('change', () => renderVendorChart(vendorFundSelect.value, vendorVendorSelect.value));
 
   // --- Budget Planning Tools ---
-  const unallocFundSelect = document.getElementById('filter-unalloc-fund');
-  populateFundFilter(unallocFundSelect);
-  renderUnallocatedBreakdown();
-  unallocFundSelect.addEventListener('change', (e) => renderUnallocatedBreakdown(e.target.value));
+  safeRender('UnallocatedBreakdown', () => {
+    const unallocFundSelect = document.getElementById('filter-unalloc-fund');
+    if (!unallocFundSelect) return;
+    populateFundFilter(unallocFundSelect);
+    renderUnallocatedBreakdown();
+    unallocFundSelect.addEventListener('change', (e) => renderUnallocatedBreakdown(e.target.value));
+  });
 
-  initHiringCalculator();
-  initSOWCutSimulator();
-  initScenarioPlanner();
-  renderRunwayGauges();
+  safeRender('HiringCalculator', initHiringCalculator);
+  safeRender('SOWCutSimulator', initSOWCutSimulator);
+  safeRender('ScenarioPlanner', initScenarioPlanner);
+  safeRender('RunwayGauges', renderRunwayGauges);
 
   // --- Interactive Sunburst (with fund filter) ---
-  const sunburstFundSelect = document.getElementById('filter-sunburst-fund');
-  populateFundFilter(sunburstFundSelect);
-  renderSunburstChart();
-  sunburstFundSelect.addEventListener('change', (e) => renderSunburstChart(e.target.value, null));
+  safeRender('Sunburst', () => {
+    const sunburstFundSelect = document.getElementById('filter-sunburst-fund');
+    if (!sunburstFundSelect) return;
+    populateFundFilter(sunburstFundSelect);
+    renderSunburstChart();
+    sunburstFundSelect.addEventListener('change', (e) => renderSunburstChart(e.target.value, null));
+  });
 
   // --- Spend Heatmap (with mode toggle) ---
-  renderHeatmap('forecast');
-  document.querySelectorAll('#heatmap-mode-toggle .calc-toggle-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('#heatmap-mode-toggle .calc-toggle-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      renderHeatmap(btn.dataset.mode);
+  safeRender('Heatmap', () => {
+    renderHeatmap('forecast');
+    document.querySelectorAll('#heatmap-mode-toggle .calc-toggle-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#heatmap-mode-toggle .calc-toggle-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        renderHeatmap(btn.dataset.mode);
+      });
     });
   });
 
   // Timeline & Variance
-  renderTimelineChart();
-  renderVarianceChart();
-  renderForecastVarianceChart();
-  initTableControls();
-  renderTable();
-  renderAudit();
-  renderRecommendations();
+  safeRender('TimelineChart', renderTimelineChart);
+  safeRender('VarianceChart', renderVarianceChart);
+  safeRender('ForecastVarianceChart', renderForecastVarianceChart);
+  safeRender('TableControls', initTableControls);
+  safeRender('Table', renderTable);
+  safeRender('Audit', renderAudit);
+  safeRender('Recommendations', renderRecommendations);
 }
 
 /**
@@ -2188,33 +2262,46 @@ function showEmptyState() {
 // Boot
 // ============================================================
 document.addEventListener('DOMContentLoaded', async () => {
-  // Apply chart theme colors based on current theme
-  applyChartTheme();
+  try {
+    // Apply chart theme colors based on current theme
+    applyChartTheme();
 
-  // Non-data-dependent UI setup
-  initNav();
-  initScrollReveal();
-  initNavbarScroll();
-  initThemeToggle();
-  initUploadPanel();
+    // Non-data-dependent UI setup
+    initNav();
+    initScrollReveal();
+    initNavbarScroll();
+    initThemeToggle();
+    initUploadPanel();
 
-  // Load data
-  const result = await loadBudgetData();
-  if (!result.data) {
-    showEmptyState();
-    return;
-  }
-
-  budgetData = result.data;
-
-  // Update the "Updated" date in the header if we know when data was uploaded
-  if (result.uploadedAt) {
-    const dateEl = document.querySelector('header .text-slate-500 span');
-    if (dateEl) {
-      const d = new Date(result.uploadedAt);
-      dateEl.textContent = `Updated ${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+    // Load data
+    const result = await loadBudgetData();
+    if (!result.data) {
+      showEmptyState();
+      return;
     }
-  }
 
-  initDashboard();
+    // Validate data shape before rendering
+    const validationError = validateBudgetData(result.data);
+    if (validationError) {
+      console.error('[Dashboard] Data validation failed:', validationError);
+      showEmptyState();
+      return;
+    }
+
+    budgetData = result.data;
+
+    // Update the "Updated" date in the header if we know when data was uploaded
+    if (result.uploadedAt) {
+      const dateEl = document.querySelector('header .text-slate-500 span');
+      if (dateEl) {
+        const d = new Date(result.uploadedAt);
+        dateEl.textContent = `Updated ${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+      }
+    }
+
+    initDashboard();
+  } catch (err) {
+    console.error('[Dashboard] Fatal boot error:', err);
+    showEmptyState();
+  }
 });

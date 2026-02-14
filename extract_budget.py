@@ -255,11 +255,12 @@ def extract() -> dict:
         {
             "id": 7,
             "severity": "info",
-            "title": "Unapproved Items Separated",
+            "title": "Unapproved Items Separated (Resolved)",
             "detail": (
                 "EDA Projects rows use 'Unapproved Budget' and 'Unapproved SOW' "
                 "event types. These are excluded from approved budget rollups and "
-                "shown separately in the dashboard as pending approval."
+                "shown separately in the dashboard with distinct styling and a "
+                "Pending Approval KPI card."
             ),
         },
     ]
@@ -301,37 +302,39 @@ def extract() -> dict:
         },
         {
             "id": 4,
-            "priority": "medium",
-            "title": "Add Percentage Variance Columns",
+            "priority": "low",
+            "title": "Add Percentage Variance Columns (Done)",
             "detail": (
-                "Add (Budget - Actual) / Budget percentage columns alongside "
-                "the existing dollar variance. Percentages contextualize the "
-                "magnitude of variances across different-sized line items."
+                "The dashboard line items table now includes a '% Spent' column "
+                "showing (Actual / Forecast) with color-coded indicators. Dollar "
+                "variance columns were already present. This recommendation has "
+                "been implemented."
             ),
-            "impact": "Better executive-level variance analysis",
+            "impact": "Completed — executive-level variance analysis available",
         },
         {
             "id": 5,
             "priority": "medium",
-            "title": "Add Conditional Formatting in Excel",
+            "title": "Add Conditional Formatting in Source Excel",
             "detail": (
-                "Apply green/yellow/red color coding in the spreadsheet: red for "
-                "negative Committed remainders, traffic-light colors for Budget "
-                "vs Actual thresholds (>10% under = green, 0-10% = yellow, "
-                "over = red)."
+                "The dashboard already applies green/red color coding via "
+                "val-positive/val-negative indicators and severity badges. "
+                "Consider mirroring this in the source Excel spreadsheet for "
+                "users who work directly in the file."
             ),
-            "impact": "At-a-glance health indicators for budget status",
+            "impact": "Consistent health indicators across dashboard and spreadsheet",
         },
         {
             "id": 6,
             "priority": "low",
-            "title": "Add Forecast vs Actual Variance Section",
+            "title": "Forecast vs Actual Variance (Done)",
             "detail": (
-                "Add a third variance section (Forecast - Actual) to measure "
-                "forecasting accuracy. This completes the analysis triangle: "
-                "Budget vs Actual, Budget vs Forecast, Forecast vs Actual."
+                "A dedicated Forecast vs Actual variance chart has been added to "
+                "the dashboard alongside the Budget vs Actual chart. This completes "
+                "the analysis triangle: Budget vs Actual, Budget vs Forecast, "
+                "Forecast vs Actual."
             ),
-            "impact": "Measures and improves forecasting accuracy over time",
+            "impact": "Completed — forecasting accuracy is now measurable",
         },
         {
             "id": 7,

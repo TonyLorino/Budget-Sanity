@@ -9,17 +9,11 @@ Chart.register(...registerables);
 let budgetData = null;
 
 // ============================================================
-// Chart.js global defaults
+// Chart.js global defaults (theme-aware colors applied in applyChartTheme)
 // ============================================================
-Chart.defaults.color = '#94a3b8';
-Chart.defaults.borderColor = 'rgba(51, 65, 85, 0.3)';
 Chart.defaults.font.family = "'Inter', sans-serif";
 Chart.defaults.font.size = 12;
 Chart.defaults.plugins.legend.display = false;
-Chart.defaults.plugins.tooltip.backgroundColor = 'rgba(15, 23, 42, 0.95)';
-Chart.defaults.plugins.tooltip.titleColor = '#e2e8f0';
-Chart.defaults.plugins.tooltip.bodyColor = '#94a3b8';
-Chart.defaults.plugins.tooltip.borderColor = 'rgba(51, 65, 85, 0.5)';
 Chart.defaults.plugins.tooltip.borderWidth = 1;
 Chart.defaults.plugins.tooltip.cornerRadius = 8;
 Chart.defaults.plugins.tooltip.padding = 12;
@@ -98,10 +92,11 @@ function renderKPIs() {
   const pendingBudget = unapprovedBudgetRows.reduce((s, i) => s + i.budget_fy26, 0);
   const pendingSOWs = unapprovedSOWRows.reduce((s, i) => s + i.committed_fy26, 0);
 
-  // Count months with actuals dynamically from the totals row
-  const monthsElapsed = Math.max(1, budgetData.totals.actual_monthly.filter(v => v > 0).length);
-  const burnRate = actualFY / monthsElapsed;
-  const projectedAnnual = burnRate * 12;
+  // % of fiscal year elapsed (calendar-based, FY = Jan-Dec)
+  const now = new Date();
+  const fyStart = new Date(now.getFullYear(), 0, 1);   // Jan 1
+  const fyEnd   = new Date(now.getFullYear(), 11, 31);  // Dec 31
+  const pctYearElapsed = ((now - fyStart) / (fyEnd - fyStart)) * 100;
 
   const kpis = [
     {
@@ -153,14 +148,14 @@ function renderKPIs() {
       tooltip: 'Forecast (Committed) minus YTD Actuals. Represents the dollar amount of forecasted spend that has not yet been invoiced.',
     },
     {
-      label: 'Projected Annual',
-      value: fmt(projectedAnnual),
-      sub: projectedAnnual > approvedFY
-        ? `${fmt(projectedAnnual - approvedFY)} over approved budget`
-        : `${fmt(approvedFY - projectedAnnual)} under approved budget`,
-      accent: projectedAnnual > approvedFY ? 'rose' : 'emerald',
-      progress: (projectedAnnual / approvedFY) * 100,
-      tooltip: `YTD Actuals ÷ months with actuals (${monthsElapsed}) × 12. Extrapolates the current monthly burn rate to a full-year estimate. Compared against Approved Budget to flag over/under-spend trajectories.`,
+      label: 'Spend Pace',
+      value: `${pctYearElapsed.toFixed(1)}% of year`,
+      sub: pctSpent <= pctYearElapsed
+        ? `${(pctYearElapsed - pctSpent).toFixed(1)}pp under pace (${pctSpent.toFixed(1)}% spent)`
+        : `${(pctSpent - pctYearElapsed).toFixed(1)}pp over pace (${pctSpent.toFixed(1)}% spent)`,
+      accent: pctSpent <= pctYearElapsed + 5 ? 'emerald' : 'rose',
+      progress: pctYearElapsed,
+      tooltip: 'Percentage of the calendar year elapsed vs percentage of forecast spent. If spend % exceeds calendar %, the team is ahead of pace and may overshoot the forecast.',
     },
   ];
 
@@ -228,7 +223,7 @@ function renderCategoryChart() {
       },
       scales: {
         x: {
-          grid: { color: 'rgba(51, 65, 85, 0.2)' },
+          grid: { color: getThemeColors().grid },
           ticks: {
             callback: (v) => fmt(v),
           },
@@ -260,7 +255,7 @@ function renderFundChart() {
         {
           data: values,
           backgroundColor: PALETTE.slice(0, labels.length),
-          borderColor: 'rgba(2, 6, 23, 0.8)',
+          borderColor: getThemeColors().doughnutBorder,
           borderWidth: 2,
           hoverOffset: 6,
         },
@@ -313,7 +308,7 @@ function renderExpenseChart() {
         {
           data: values,
           backgroundColor: ['#3b82f6', '#f59e0b'],
-          borderColor: 'rgba(2, 6, 23, 0.8)',
+          borderColor: getThemeColors().doughnutBorder,
           borderWidth: 2,
           hoverOffset: 6,
         },
@@ -488,6 +483,7 @@ function renderTimelineChart() {
   const forecastMonthly = budgetData.totals.forecast_monthly;
   const actualMonthly = budgetData.totals.actual_monthly;
 
+  const tc = getThemeColors();
   new Chart(document.getElementById('chart-timeline'), {
     type: 'line',
     data: {
@@ -504,7 +500,7 @@ function renderTimelineChart() {
           pointRadius: 4,
           pointHoverRadius: 6,
           pointBackgroundColor: '#3b82f6',
-          pointBorderColor: '#020617',
+          pointBorderColor: tc.pointBorder,
           pointBorderWidth: 2,
         },
         {
@@ -518,7 +514,7 @@ function renderTimelineChart() {
           pointRadius: 3,
           pointHoverRadius: 5,
           pointBackgroundColor: '#8b5cf6',
-          pointBorderColor: '#020617',
+          pointBorderColor: tc.pointBorder,
           pointBorderWidth: 2,
         },
         {
@@ -532,7 +528,7 @@ function renderTimelineChart() {
           pointRadius: 5,
           pointHoverRadius: 7,
           pointBackgroundColor: '#10b981',
-          pointBorderColor: '#020617',
+          pointBorderColor: tc.pointBorder,
           pointBorderWidth: 2,
         },
       ],
@@ -553,10 +549,10 @@ function renderTimelineChart() {
       },
       scales: {
         x: {
-          grid: { color: 'rgba(51, 65, 85, 0.15)' },
+          grid: { color: tc.grid },
         },
         y: {
-          grid: { color: 'rgba(51, 65, 85, 0.2)' },
+          grid: { color: tc.grid },
           ticks: {
             callback: (v) => fmt(v),
           },
@@ -612,7 +608,7 @@ function renderVarianceChart() {
       scales: {
         x: { grid: { display: false } },
         y: {
-          grid: { color: 'rgba(51, 65, 85, 0.2)' },
+          grid: { color: getThemeColors().grid },
           ticks: { callback: (v) => fmt(v) },
         },
       },
@@ -666,7 +662,7 @@ function renderForecastVarianceChart() {
       scales: {
         x: { grid: { display: false } },
         y: {
-          grid: { color: 'rgba(51, 65, 85, 0.2)' },
+          grid: { color: getThemeColors().grid },
           ticks: { callback: (v) => fmt(v) },
         },
       },
@@ -763,7 +759,7 @@ function renderApprovedCommittedChart(fundFilter = '') {
       },
       scales: {
         x: {
-          grid: { color: 'rgba(51, 65, 85, 0.2)' },
+          grid: { color: getThemeColors().grid },
           ticks: { callback: (v) => fmt(v) },
         },
         y: {
@@ -1068,12 +1064,13 @@ function initNavbarScroll() {
   window.addEventListener('scroll', () => {
     if (!ticking) {
       requestAnimationFrame(() => {
+        const style = getComputedStyle(document.documentElement);
         if (window.scrollY > 20) {
-          navbar.style.boxShadow = '0 4px 30px rgba(0, 0, 0, 0.3)';
-          navbar.style.borderColor = 'rgba(51, 65, 85, 0.4)';
+          navbar.style.boxShadow = `0 4px 30px ${style.getPropertyValue('--shadow-color').trim()}`;
+          navbar.style.borderColor = style.getPropertyValue('--border-hover').trim();
         } else {
           navbar.style.boxShadow = 'none';
-          navbar.style.borderColor = 'rgba(30, 41, 59, 0.5)';
+          navbar.style.borderColor = style.getPropertyValue('--border-subtle').trim();
         }
         ticking = false;
       });
@@ -1167,7 +1164,7 @@ function renderUnallocatedBreakdown(fundFilter = '') {
         tooltip: { callbacks: { label: (ctx) => ` ${ctx.dataset.label}: ${fmtFull(ctx.raw)}` } },
       },
       scales: {
-        x: { stacked: true, grid: { color: 'rgba(51, 65, 85, 0.2)' }, ticks: { callback: (v) => fmt(v) } },
+        x: { stacked: true, grid: { color: getThemeColors().grid }, ticks: { callback: (v) => fmt(v) } },
         y: { stacked: true, grid: { display: false }, ticks: { font: { size: 11 } } },
       },
     },
@@ -1636,8 +1633,8 @@ function renderSunburstChart(fundFilter = '', drilledCategory = null) {
       data: {
         labels: [...innerLabels, ...outerLabels],
         datasets: [
-          { label: 'Category', data: innerData, backgroundColor: innerColors, borderColor: 'rgba(2, 6, 23, 0.8)', borderWidth: 2, weight: 1 },
-          { label: 'SOWs & Unallocated', data: outerData, backgroundColor: outerColors, borderColor: 'rgba(2, 6, 23, 0.6)', borderWidth: 1, weight: 2 },
+          { label: 'Category', data: innerData, backgroundColor: innerColors, borderColor: getThemeColors().doughnutBorder, borderWidth: 2, weight: 1 },
+          { label: 'SOWs & Unallocated', data: outerData, backgroundColor: outerColors, borderColor: getThemeColors().doughnutBorder, borderWidth: 1, weight: 2 },
         ],
       },
       options: {
@@ -1697,8 +1694,8 @@ function renderSunburstChart(fundFilter = '', drilledCategory = null) {
       data: {
         labels: [...innerLabels, ...outerLabels],
         datasets: [
-          { label: 'Category', data: innerData, backgroundColor: innerColors, borderColor: 'rgba(2, 6, 23, 0.8)', borderWidth: 2, weight: 1 },
-          { label: 'SOWs & Unallocated', data: outerData, backgroundColor: outerColors, borderColor: 'rgba(2, 6, 23, 0.6)', borderWidth: 1, weight: 2 },
+          { label: 'Category', data: innerData, backgroundColor: innerColors, borderColor: getThemeColors().doughnutBorder, borderWidth: 2, weight: 1 },
+          { label: 'SOWs & Unallocated', data: outerData, backgroundColor: outerColors, borderColor: getThemeColors().doughnutBorder, borderWidth: 1, weight: 2 },
         ],
       },
       options: {
@@ -1787,7 +1784,7 @@ function renderVendorChart(fundFilter = '', vendorFilter = '') {
           tooltip: { callbacks: { label: (ctx) => ` ${ctx.label}: ${fmtFull(ctx.raw)}` } },
         },
         scales: {
-          x: { grid: { color: 'rgba(51, 65, 85, 0.2)' }, ticks: { callback: (v) => fmt(v) } },
+          x: { grid: { color: getThemeColors().grid }, ticks: { callback: (v) => fmt(v) } },
           y: { grid: { display: false }, ticks: { font: { size: 11 } } },
         },
       },
@@ -1824,7 +1821,7 @@ function renderVendorChart(fundFilter = '', vendorFilter = '') {
           tooltip: { callbacks: { label: (ctx) => ` ${fmtFull(ctx.raw)}` } },
         },
         scales: {
-          x: { grid: { color: 'rgba(51, 65, 85, 0.2)' }, ticks: { callback: (v) => fmt(v) } },
+          x: { grid: { color: getThemeColors().grid }, ticks: { callback: (v) => fmt(v) } },
           y: { grid: { display: false }, ticks: { font: { size: 11 } } },
         },
       },
@@ -1961,72 +1958,90 @@ function initUploadPanel() {
 }
 
 // ============================================================
-// 15. Refresh Button (mode-aware)
+// 15. Theme Toggle (light/dark)
 // ============================================================
-function initRefreshButton() {
-  const btn = document.getElementById('refresh-btn');
-  const icon = document.getElementById('refresh-icon');
-  const status = document.getElementById('refresh-status');
+function getThemeColors() {
+  const style = getComputedStyle(document.documentElement);
+  return {
+    text: style.getPropertyValue('--text-secondary').trim(),
+    grid: style.getPropertyValue('--chart-grid').trim(),
+    tooltipBg: style.getPropertyValue('--tooltip-bg').trim(),
+    tooltipTitle: style.getPropertyValue('--text-primary').trim(),
+    tooltipBody: style.getPropertyValue('--text-secondary').trim(),
+    tooltipBorder: style.getPropertyValue('--tooltip-border').trim(),
+    pointBorder: style.getPropertyValue('--chart-point-border').trim(),
+    doughnutBorder: style.getPropertyValue('--chart-border').trim(),
+  };
+}
 
-  if (!btn) return;
+function applyChartTheme() {
+  const c = getThemeColors();
+  Chart.defaults.color = c.text;
+  Chart.defaults.borderColor = c.grid;
+  Chart.defaults.plugins.tooltip.backgroundColor = c.tooltipBg;
+  Chart.defaults.plugins.tooltip.titleColor = c.tooltipTitle;
+  Chart.defaults.plugins.tooltip.bodyColor = c.tooltipBody;
+  Chart.defaults.plugins.tooltip.borderColor = c.tooltipBorder;
+}
 
-  const isProduction = !!SUPABASE_URL;
+function initThemeToggle() {
+  const toggle = document.getElementById('theme-toggle');
+  if (!toggle) return;
 
-  btn.addEventListener('click', async () => {
-    if (btn.disabled) return;
-    btn.disabled = true;
+  // Apply saved preference (or default to dark)
+  const saved = localStorage.getItem('budget-sanity-theme');
+  if (saved === 'light') {
+    document.documentElement.setAttribute('data-theme', 'light');
+  }
 
-    icon.style.animation = 'spin 0.8s linear infinite';
-    status.classList.remove('hidden');
+  toggle.addEventListener('click', () => {
+    const current = document.documentElement.getAttribute('data-theme');
+    const next = current === 'light' ? 'dark' : 'light';
 
-    if (isProduction) {
-      // Production: re-fetch from Supabase
-      status.textContent = 'Fetching latest...';
-      try {
-        const result = await fetchFromSupabase();
-        if (result) {
-          budgetData = result.budgetData;
-          status.textContent = 'Updated! Reloading...';
-          setTimeout(() => location.reload(), 600);
-        } else {
-          status.textContent = 'No data found';
-          icon.style.animation = '';
-          btn.disabled = false;
-          setTimeout(() => status.classList.add('hidden'), 3000);
-        }
-      } catch (err) {
-        status.textContent = 'Fetch error';
-        console.error('Supabase fetch failed:', err);
-        icon.style.animation = '';
-        btn.disabled = false;
-        setTimeout(() => status.classList.add('hidden'), 3000);
-      }
+    if (next === 'dark') {
+      document.documentElement.removeAttribute('data-theme');
     } else {
-      // Local dev: run Python extraction
-      status.textContent = 'Extracting...';
-      try {
-        const res = await fetch('/__extract', { method: 'POST' });
-        const data = await res.json();
+      document.documentElement.setAttribute('data-theme', 'light');
+    }
+    localStorage.setItem('budget-sanity-theme', next);
 
-        if (data.ok) {
-          status.textContent = 'Done! Reloading...';
-          setTimeout(() => location.reload(), 600);
-        } else {
-          status.textContent = 'Error — check console';
-          console.error('Extract failed:', data.error);
-          icon.style.animation = '';
-          btn.disabled = false;
-          setTimeout(() => status.classList.add('hidden'), 3000);
-        }
-      } catch (err) {
-        status.textContent = 'Network error';
-        console.error('Extract request failed:', err);
-        icon.style.animation = '';
-        btn.disabled = false;
-        setTimeout(() => status.classList.add('hidden'), 3000);
-      }
+    // Update charts with new theme colors
+    applyChartTheme();
+
+    // Re-render all charts if data is loaded
+    if (budgetData) {
+      rerenderAllCharts();
     }
   });
+}
+
+function rerenderAllCharts() {
+  // Destroy all existing chart instances
+  Object.values(Chart.instances).forEach((instance) => {
+    instance.destroy();
+  });
+  acChart = null;
+  unallocChart = null;
+  vendorChart = null;
+  sunburstChart = null;
+
+  // Re-render everything
+  renderKPIs();
+  renderCategoryChart();
+  renderFundChart();
+  renderExpenseChart();
+  renderApprovedCommittedChart();
+  renderVendorChart();
+  renderUnallocatedBreakdown();
+  renderRunwayGauges();
+  renderSunburstChart();
+  renderHeatmap(document.querySelector('#heatmap-mode-toggle .calc-toggle-btn.active')?.dataset.mode || 'forecast');
+  renderTimelineChart();
+  renderVarianceChart();
+  renderForecastVarianceChart();
+  renderTable();
+  renderAudit();
+  renderRecommendations();
 }
 
 // ============================================================
@@ -2173,11 +2188,14 @@ function showEmptyState() {
 // Boot
 // ============================================================
 document.addEventListener('DOMContentLoaded', async () => {
+  // Apply chart theme colors based on current theme
+  applyChartTheme();
+
   // Non-data-dependent UI setup
   initNav();
   initScrollReveal();
   initNavbarScroll();
-  initRefreshButton();
+  initThemeToggle();
   initUploadPanel();
 
   // Load data

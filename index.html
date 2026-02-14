@@ -6,6 +6,12 @@
   <title>CDO 2026 Budget Dashboard</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/src/style.css" />
+  <script>
+    // Apply theme immediately to prevent flash of wrong theme
+    if (localStorage.getItem('budget-sanity-theme') === 'light') {
+      document.documentElement.setAttribute('data-theme', 'light');
+    }
+  </script>
 </head>
 <body class="bg-slate-950 text-slate-100 font-sans antialiased">
 
@@ -28,9 +34,9 @@
         <a href="#recommendations" class="nav-link">Recommendations</a>
       </div>
       <div class="flex items-center gap-2">
-        <button id="refresh-btn" title="Re-extract from Excel" class="p-2 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-blue-400 transition relative">
-          <svg id="refresh-icon" class="w-5 h-5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-          <span id="refresh-status" class="hidden absolute -bottom-6 left-1/2 -translate-x-1/2 text-xs whitespace-nowrap bg-slate-800 text-slate-300 px-2 py-0.5 rounded"></span>
+        <button id="theme-toggle" title="Toggle light/dark mode" class="theme-toggle" aria-label="Toggle theme">
+          <svg class="theme-icon-sun" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+          <svg class="theme-icon-moon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
         </button>
         <button id="mobile-menu-btn" class="md:hidden p-2 rounded-lg hover:bg-slate-800 transition">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
@@ -72,7 +78,7 @@
 
     <!-- Hero Header -->
     <header class="mb-12 animate-fade-in">
-      <div class="flex flex-col md:flex-row md:items-end md:justify-between gap-4 mb-2">
+      <div class="flex flex-col md:flex-row md:items-start md:justify-start gap-4 mb-2">
         <div>
           <p class="text-sm font-medium text-blue-400 tracking-wide uppercase mb-1">Corporate Data Office</p>
           <h1 class="text-4xl md:text-5xl font-extrabold tracking-tight bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent">
@@ -385,8 +391,8 @@
         <!-- Controls -->
         <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 mb-4">
           <div class="relative flex-1">
-            <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-            <input id="table-search" type="text" placeholder="Search categories, vendors, descriptions..." class="w-full pl-10 pr-4 py-2.5 bg-slate-800/60 border border-slate-700/50 rounded-xl text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500/40 transition" />
+            <svg class="table-search-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+            <input id="table-search" type="text" placeholder="Search categories, vendors, descriptions..." class="table-search" />
           </div>
           <div class="flex gap-2">
             <select id="filter-fund" class="table-filter">
